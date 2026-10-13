@@ -15,19 +15,10 @@ Github - [Cubic Chunks - 1.12.2 and lower](https://github.com/OpenCubicChunks/Cu
 
 ### Cloning the repository
 
-Note: you need git installed to do the following:
-```
-git clone --recursive
-```
-You need a git submodule for the project to compile.
-If you don't yet have the submodule but already cloned the repository:
-```
-git submodule update --init --recursive
-```
+A normal clone is enough. [CubicChunksCore](https://github.com/OpenCubicChunks/CubicChunksCore) is vendored in `CubicChunksCore/` at commit `75a1100c8a6d47f02bde8515d4a7de207f04be36` and is built as a Gradle subproject. There is no git submodule and no external CubicChunksCore artifact.
 
-To get latest version of the submodule:
 ```
-git submodule update --recursive --remote
+git clone <repository-url>
 ```
 
 ### .git-blame-ignore-revs
