@@ -316,22 +316,27 @@ processResources.dependsOn(genAll, "CubicChunksCore:assemble")
 // Force core to be built before the main project
 compileJava.dependsOn("CubicChunksCore:assemble")
 
-// unzipping subproject (CubicChunksCore) tests
-// TODO disabled until we figure out how to fix java modules complaining
-//tasks.register('unzipTests', Copy) {
-//    outputs.upToDateWhen {
-//        false
-//    }
-//    dependsOn(configurations.named("extraTests"))
-//    from(configurations.named("extraTests"))
-//    doFirst {
-//        //noinspection ConfigurationAvoidance, we actually do want to resolve here
-//        var testsFile = configurations["extraTests"].resolve().iterator().next()
-//        from(zipTree(testsFile))
-//        exclude(testsFile.name)
-//    }
-//    into(sourceSets.test.output.classesDirs.asPath)
-//}
+// Unzip CubicChunksCore tests into the single test classes directory.
+// The old into(classesDirs.asPath) joined every classes dir with the path
+// separator, which is not a directory and made the JVM treat it as a module path.
+tasks.register('unzipTests', Copy) {
+    outputs.upToDateWhen { false }
+    dependsOn(configurations.named('extraTests'))
+    into(sourceSets.test.java.destinationDirectory)
+    exclude 'io/github/opencubicchunks/cc_core/minecraft/**'
+    doFirst {
+        //noinspection ConfigurationAvoidance, we actually do want to resolve here
+        def testsFile = configurations.extraTests.resolve().iterator().next()
+        from(zipTree(testsFile)) {
+            exclude 'io/github/opencubicchunks/cc_core/minecraft/**'
+            exclude testsFile.name
+        }
+    }
+}
+
+tasks.named('unzipTests').configure {
+    mustRunAfter 'cleanTest'
+}
 
 tasks.withType(Test).configureEach {
     // gradle docs suggest processors/2 which actually runs fractionally faster than just processors
@@ -343,7 +348,7 @@ test {
     minHeapSize = "512M"
     maxHeapSize = "2048M"
 
-//    dependsOn(project.tasks.named("unzipTests"))
+    dependsOn('unzipTests')
     useJUnitPlatform {
         excludeTags "longRunTest"
     }
@@ -358,6 +363,22 @@ test {
 
     jvmArgs("-ea", "-Dmixin.debug.verbose=true", "-Dmixin.debug.export=true", "-Dmixin.checks.interfaces=true")
     exclude "**/mixin*"
+}
+
+// Core tests are class files from unzipTests. Mod compileJava is E4 and must not
+// gate ./gradlew test. NeoForge still supplies Minecraft on the test configurations;
+// only the mod's own classes output is dropped from the test compile/runtime path.
+gradle.projectsEvaluated {
+    tasks.named('compileTestJava', JavaCompile).configure {
+        setDependsOn(dependsOn.findAll { dependency ->
+            def label = dependency instanceof Task ? dependency.name : dependency.toString()
+            !(label == 'classes' || label.endsWith(':classes') || label.contains('task \':classes\''))
+        })
+        classpath = configurations.testCompileClasspath
+    }
+    tasks.named('test', Test).configure {
+        classpath = sourceSets.test.output + configurations.testRuntimeClasspath
+    }
 }
 
 // TODO longRunTest is disabled for now because MDG doesn't support multiple test tasks

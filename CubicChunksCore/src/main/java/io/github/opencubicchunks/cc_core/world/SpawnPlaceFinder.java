@@ -104,7 +104,7 @@ public final class SpawnPlaceFinder {
 
     private static MCBlockPos inWorldUp(MCLevelHeightAccessor level, MCBlockPos original, double up) {
         int y = (int) (original.getY() + up);
-        y = MathUtil.clamp(y, level.getMinBuildHeight(), level.getMaxBuildHeight());
+        y = MathUtil.clamp(y, level.getMinY(), level.getMaxY());
         return new MCBlockPos(original.getX(), y, original.getZ());
     }
 }

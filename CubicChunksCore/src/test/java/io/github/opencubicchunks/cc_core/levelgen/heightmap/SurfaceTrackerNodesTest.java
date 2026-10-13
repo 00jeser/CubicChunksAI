@@ -498,17 +498,17 @@ public class SurfaceTrackerNodesTest {
 
         LongSet requiredPositions = new LongOpenHashSet();
         //Root will not be added if there are no leaves in the tree, so we add it here
-        requiredPositions.add(MCChunkPos.asLong(root.getScale(), root.getScaledY()));
+        requiredPositions.add(MCChunkPos.pack(root.getScale(), root.getScaledY()));
         //Collect all positions that are required to be loaded
         for (SurfaceTrackerLeaf leaf : requiredLeaves) {
             SurfaceTrackerNode node = leaf;
             while (node != null) {
-                requiredPositions.add(MCChunkPos.asLong(node.getScale(), node.getScaledY()));
+                requiredPositions.add(MCChunkPos.pack(node.getScale(), node.getScaledY()));
 
                 if (node instanceof SurfaceTrackerBranch branch) {
                     for (SurfaceTrackerNode child : branch.getChildren()) {
                         if (child != null) {
-                            requiredPositions.add(MCChunkPos.asLong(child.getScale(), child.getScaledY()));
+                            requiredPositions.add(MCChunkPos.pack(child.getScale(), child.getScaledY()));
                         }
                     }
                 }
@@ -528,7 +528,7 @@ public class SurfaceTrackerNodesTest {
     private static void verifyAllNodesInRequiredSet(SurfaceTrackerBranch branch, LongSet requiredNodes) {
         for (SurfaceTrackerNode child : branch.getChildren()) {
             if (child != null) {
-                if (!requiredNodes.contains(MCChunkPos.asLong(child.getScale(), child.getScaledY()))) {
+                if (!requiredNodes.contains(MCChunkPos.pack(child.getScale(), child.getScaledY()))) {
                     throw new IllegalStateException("Heightmap borken");
                 }
 

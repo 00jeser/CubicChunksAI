@@ -4,7 +4,7 @@ import io.github.opencubicchunks.javaheaders.api.Header;
 
 @Header
 public interface MCLevelHeightAccessor {
-    int getMinBuildHeight();
+    int getMinY();
 
-    int getMaxBuildHeight();
+    int getMaxY();
 }
