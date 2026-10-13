@@ -66,7 +66,7 @@
 | `MCSectionPos` | `SectionPos` |
 | `MCVec3i` | `Vec3i` |
 
-Таблица соответствий — корневой `javaHeaders.json`. Плагин сводит методы по имени: у `MCChunkPos` это `pack` / `unpack` / `getX` / `getZ`, у `MCLevelHeightAccessor` — `getMinY` / `getMaxY`. Пока трансформ не применён, вызов метода заглушки невозможен: конструкторы бросают `IllegalStateException`, методы объявлены `native`.
+Таблица соответствий — корневой `javaHeaders.json`. Плагин сводит методы по имени: у `MCChunkPos` это `pack` / `unpack` / `getX` / `getZ`, у `MCLevelHeightAccessor` — `getMinY` / `getMaxY`. Поля record `ChunkPos` закрыты, а одноимённый аксессор javaheaders переписывает в `getfield`, поэтому координаты экземпляра читаются через публичные `pack()` и `getX` / `getZ`. Пока трансформ не применён, вызов метода заглушки невозможен: конструкторы бросают `IllegalStateException`, методы объявлены `native`.
 
 ### Карта высот
 

@@ -4,8 +4,6 @@ import io.github.opencubicchunks.javaheaders.api.Header;
 
 @Header
 public class MCChunkPos {
-    public final int x, z;
-
     public MCChunkPos(int x, int z) {
         throw new IllegalStateException("Per-version doesn't overwrite method");
     }

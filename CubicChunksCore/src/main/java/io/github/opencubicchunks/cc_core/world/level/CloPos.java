@@ -51,8 +51,11 @@ public class CloPos {
     }
 
     private CloPos(MCChunkPos columnPos) {
-        this.x = columnPos.x;
-        this.z = columnPos.z;
+        // ChunkPos fields are private. javaheaders turns a same-named accessor into getfield,
+        // which is illegal across modules, so coordinates come from the public pack/getX/getZ.
+        long packed = columnPos.pack();
+        this.x = MCChunkPos.getX(packed);
+        this.z = MCChunkPos.getZ(packed);
         this.y = CLO_Y_COLUMN_INDICATOR;
     }
 
