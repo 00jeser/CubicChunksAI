@@ -24,7 +24,7 @@ CubicChunksCore (JAR, javaheaders переписывает MC*)
 | Сервер | `ServerCubeCache`, `CubicChunkMap`, `CubeHolder`, `CloHolder`, `DistanceManager` через миксины, `CubicTicketStorage` | записью в регион, пока E11 не сменит `cc_save` |
 | Клиент | `ClientCubeCache`, `CubicClientLevel`, `CubicLevelRenderer`, `ViewArea` | генерацией |
 | Сеть | `CCNetworkHandler` и четыре `CCClientbound*` | тиком симуляции |
-| Конфиг | `EarlyConfig`, `CommonConfig`, `ServerConfig` | флагом `cc_isCubic`, пока E5 не запишет его из стиля |
+| Конфиг | `EarlyConfig`, `CommonConfig`, `ServerConfig` | флагом `cc_isCubic`: его пишет стиль измерения |
 | NeoForge-кромка | `movetoforgesourcesetlater` (временно), source set `forge` | игровой логикой куба |
 
 ## 2. Состояние
@@ -40,9 +40,9 @@ CubicChunksCore (JAR, javaheaders переписывает MC*)
     └── generateNewWorldsAsCC = true               кнопка создания мира
 
 Мир (ServerLevel / ClientLevel, MixinLevel)
-├── cc_isCubic: boolean                            сегодня не выставляется в ctor
-├── worldStyle: CUBIC | HYBRID | CHUNK            E5, из ServerConfig + данных уровня
-├── heightAccessor                                 ванильные getMinY/getMaxY; алиасы *BuildHeight живут до E2
+├── cc_isCubic: boolean                            ServerLevel: true ⇔ worldStyle != CHUNK
+├── worldStyle: CUBIC | HYBRID | CHUNK            ServerLevel, ключ cubicchunks:world_style
+├── heightAccessor                                 ванильные getMinY/getMaxY
 └── cubeSource: ServerCubeCache | ClientCubeCache
 
 CloPos
@@ -69,6 +69,8 @@ CubeAccess
 ├── центр просмотра (x, y, z)                      CCClientboundSetCubeCacheCenterPacket
 └── меш секции                                     ViewArea / RenderSection, E8
 ```
+
+`ServerLevel` пишет стиль в конструкторе, после `super()` и до `ServerChunkCache`. Источник — данные измерения `cubicchunks:world_style` (`<dimension>/data/cubicchunks/world_style.dat`). Ключа нет — новый уровень: перекрытие `ServerConfig` по id измерения, иначе при `generateNewWorldsAsCC` стиль `defaultWorldStyle`, иначе `CHUNK`. Файла `serverconfig/cubicchunks.toml` нет — `shouldGenerateNewWorldsAsCC()` даёт `CUBIC` или `CHUNK`. Уже записанный ключ toml не перебивает. `cc_setCubic()` вызывается только для `CUBIC` и `HYBRID`. В лог пишется `dimension=<id> style=<style> cubic=<bool>`. `ClientLevel` в конструкторе стиль не получает: клиентский кэш — E7. `generates2DChunks` у `HYBRID` и `CHUNK` на генерацию ещё не влияет — E12.
 
 Нет в этом дереве и не появляется без нового эпика: отладочный оверлей, OptiFine-ветка, формат сейва 1.12, публичный API чужого `ChunkGenerator`.
 

@@ -13,7 +13,7 @@ import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddTransform
 import io.github.notstirred.dasm.api.annotations.selector.Ref;
 import io.github.notstirred.dasm.api.annotations.transform.TransformFromMethod;
 import io.github.opencubicchunks.cc_core.utils.Coords;
-import io.github.opencubicchunks.cubicchunks.CubicChunks;
+import io.github.opencubicchunks.cc_core.world.CubicLevelHeightAccessor.WorldStyle;
 import io.github.opencubicchunks.cubicchunks.MarkableAsCubic;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
@@ -50,6 +50,16 @@ public abstract class MixinLevel implements CubicLevel, MarkableAsCubic, LevelAc
 
     protected boolean cc_isCubic;
 
+    /**
+     * Уровень без записанного стиля ведёт себя как ванильный.
+     * {@code ServerLevel} подменяет значение в {@code cc_onInit}. Клиентский уровень здесь не стилизуется (E7).
+     */
+    protected WorldStyle cc_worldStyle = WorldStyle.CHUNK;
+
+    @Override public WorldStyle cc_worldStyle() {
+        return cc_worldStyle;
+    }
+
     @Override public void cc_setCubic() {
         cc_isCubic = true;
     }
@@ -72,13 +82,6 @@ public abstract class MixinLevel implements CubicLevel, MarkableAsCubic, LevelAc
             throw new IllegalStateException("Should always be able to create a cube!");
         } else {
             return cubeaccess;
-        }
-    }
-
-    @Inject(method = "<init>", at = @At(value = "CTOR_HEAD"))
-    private void cc_init(CallbackInfo ci) {
-        if (CubicChunks.config().shouldGenerateNewWorldsAsCC()) {
-            this.cc_setCubic();
         }
     }
 

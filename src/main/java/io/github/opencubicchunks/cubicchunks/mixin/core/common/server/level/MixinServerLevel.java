@@ -8,18 +8,25 @@ import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddMethodToS
 import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddTransformToSets;
 import io.github.notstirred.dasm.api.annotations.selector.Ref;
 import io.github.notstirred.dasm.api.annotations.transform.TransformFromMethod;
+import io.github.opencubicchunks.cc_core.world.CubicLevelHeightAccessor.WorldStyle;
+import io.github.opencubicchunks.cubicchunks.CubicChunks;
+import io.github.opencubicchunks.cubicchunks.config.ServerConfig;
 import io.github.opencubicchunks.cubicchunks.mixin.core.common.world.level.MixinLevel;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
 import io.github.opencubicchunks.cubicchunks.server.level.CubicServerLevel;
 import io.github.opencubicchunks.cubicchunks.server.level.ServerCubeCache;
+import io.github.opencubicchunks.cubicchunks.world.level.CubicWorldStyleData;
+import io.github.opencubicchunks.cubicchunks.world.level.WorldStyleSelector;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.LevelClo;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.dimension.LevelStem;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import net.minecraft.world.level.storage.ServerLevelData;
 import org.spongepowered.asm.mixin.Final;
@@ -34,12 +41,27 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class MixinServerLevel extends MixinLevel implements CubicServerLevel {
     @Shadow @Final private ServerChunkCache chunkSource;
 
-    @Inject(method = "<init>", at = @At("CTOR_HEAD"))
+    // После super(): инициализаторы полей MixinLevel уже отработали, а ServerChunkCache ещё не читал cc_isCubic.
+    @Inject(method = "<init>", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;<init>(Lnet/minecraft/world/level/storage/WritableLevelData;"
+            + "Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/core/RegistryAccess;Lnet/minecraft/core/Holder;ZZJI)V", shift = At.Shift.AFTER))
     private void cc_onInit(
             MinecraftServer server, Executor dispatcher, LevelStorageSource.LevelStorageAccess levelStorageAccess, ServerLevelData serverLevelData,
-            ResourceKey dimension, LevelStem levelStem, boolean isDebug, long biomeZoomSeed, List customSpawners, boolean tickTime, CallbackInfo ci
+            ResourceKey<Level> dimension, LevelStem levelStem, boolean isDebug, long biomeZoomSeed, List customSpawners, boolean tickTime,
+            CallbackInfo ci
     ) {
-        // TODO conditionally mark as cubic based on dimension, config, level data, etc
+        var dimensionPath = levelStorageAccess.getDimensionPath(dimension);
+        WorldStyle saved = CubicWorldStyleData.read(dimensionPath);
+        ServerConfig serverConfig = ServerConfig.load(levelStorageAccess.getLevelPath(LevelResource.ROOT));
+        boolean generateNewWorldsAsCC = CubicChunks.config().shouldGenerateNewWorldsAsCC();
+        WorldStyle style = WorldStyleSelector.select(saved, generateNewWorldsAsCC, serverConfig, dimension);
+        if (saved == null) {
+            CubicWorldStyleData.write(dimensionPath, style);
+        }
+        this.cc_worldStyle = style;
+        if (style != WorldStyle.CHUNK) {
+            this.cc_setCubic();
+        }
+        CubicChunks.LOGGER.info("dimension={} style={} cubic={}", dimension.identifier(), style.name(), style != WorldStyle.CHUNK);
     }
 
     @Override public ServerCubeCache cc_getCubeSource() {

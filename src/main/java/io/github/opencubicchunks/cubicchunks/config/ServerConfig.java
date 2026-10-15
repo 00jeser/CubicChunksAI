@@ -8,6 +8,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.Nullable;
+
 import com.electronwill.nightconfig.core.CommentedConfig;
 import com.electronwill.nightconfig.core.Config;
 import net.minecraft.resources.ResourceKey;
@@ -27,23 +29,67 @@ public class ServerConfig extends BaseConfig {
     private final Map<String, WorldStyle> overrides = new HashMap<>();
 
     private ServerConfig(CommentedConfig config) {
-        // TODO actually give proper user feedback if this crashes due to incorrect values
-        defaultWorldStyle = worldStyleFromString(config.get(KEY_DEFAULT_WORLD_STYLE));
-
-        config.<List<String>>get(KEY_CUBIC_DIMENSIONS).forEach((s) -> overrides.put(s, WorldStyle.CUBIC));
-        config.<List<String>>get(KEY_HYBRID_DIMENSIONS).forEach((s) -> overrides.put(s, WorldStyle.HYBRID));
-        config.<List<String>>get(KEY_CHUNK_DIMENSIONS).forEach((s) -> overrides.put(s, WorldStyle.CHUNK));
+        defaultWorldStyle = requireStyle(config, KEY_DEFAULT_WORLD_STYLE);
+        putOverrides(config, KEY_CUBIC_DIMENSIONS, WorldStyle.CUBIC);
+        putOverrides(config, KEY_HYBRID_DIMENSIONS, WorldStyle.HYBRID);
+        putOverrides(config, KEY_CHUNK_DIMENSIONS, WorldStyle.CHUNK);
     }
 
-    private static WorldStyle worldStyleFromString(String string) {
-        if (string.equals("VANILLA")) {
-            return WorldStyle.CHUNK;
+    private void putOverrides(CommentedConfig config, String key, WorldStyle style) {
+        Object raw = config.get(key);
+        if (raw == null) {
+            return;
         }
-        return WorldStyle.valueOf(string);
+        if (!(raw instanceof List<?> list)) {
+            throw new IllegalArgumentException("Invalid value for " + key);
+        }
+        for (Object entry : list) {
+            if (!(entry instanceof String dimensionId)) {
+                throw new IllegalArgumentException("Invalid value for " + key);
+            }
+            overrides.put(dimensionId, style);
+        }
+    }
+
+    private static WorldStyle requireStyle(CommentedConfig config, String key) {
+        Object raw = config.get(key);
+        if (raw instanceof WorldStyle style) {
+            return style;
+        }
+        if (!(raw instanceof String value)) {
+            throw new IllegalArgumentException("Missing or invalid value for " + key);
+        }
+        return worldStyleFromString(key, value);
+    }
+
+    private static WorldStyle worldStyleFromString(String key, String value) {
+        String styleName = value.equals("VANILLA") ? "CHUNK" : value;
+        try {
+            return WorldStyle.valueOf(styleName);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid value \"" + value + "\" for " + key, ex);
+        }
     }
 
     public WorldStyle getWorldStyle(ResourceKey<Level> dimension) {
         return overrides.getOrDefault(dimension.identifier().toString(), defaultWorldStyle);
+    }
+
+    public boolean hasOverride(ResourceKey<Level> dimension) {
+        return overrides.containsKey(dimension.identifier().toString());
+    }
+
+    /**
+     * @return конфиг мира, либо {@code null}, если {@code serverconfig/cubicchunks.toml} ещё не создан
+     */
+    public static @Nullable ServerConfig load(Path worldFolder) {
+        File configPath = getConfigPath(worldFolder);
+        if (!configPath.isFile()) {
+            return null;
+        }
+        CommentedConfig config = createDefaultConfig();
+        read(configPath, config);
+        return new ServerConfig(config);
     }
 
     private static CommentedConfig createDefaultConfig() {
@@ -77,35 +123,4 @@ public class ServerConfig extends BaseConfig {
         return new File(worldFolder.toFile(), FILE_PATH);
     }
 
-    private static void createConfig(Path worldFolder) {
-        File configPath = getConfigPath(worldFolder);
-        if (configPath.exists()) {
-            return;
-        }
-        configPath.getParentFile().mkdirs();
-        write(configPath, createDefaultConfig());
-    }
-
-//    public static @Nullable ServerConfig getConfig(LevelStorageSource.LevelStorageAccess levelStorageAccess) {
-//        File configPath = getConfigPath(((LevelStorageAccessAccess) levelStorageAccess).getLevelPath());
-//        if (configPath.exists()) {
-//            var config = createDefaultConfig();
-//            read(configPath, config);
-//            var serverConfig = new ServerConfig(config);
-//            // Write the config again in case any keys were missing or invalid
-//            write(configPath, config);
-//            return serverConfig;
-//        }
-//        return null;
-//    }
-//
-//    public static void generateConfigIfNecessary(LevelStorageSource.LevelStorageAccess levelStorageAccess) {
-//        if (CubicChunks.config().shouldGenerateNewWorldsAsCC()) {
-//            CubicChunks.LOGGER.info("New worlds are configured to generate as CC; creating CC config file");
-//            var rootFolderPath = ((LevelStorageAccessAccess) levelStorageAccess).getLevelPath();
-//            ServerConfig.createConfig(rootFolderPath);
-//        } else {
-//            CubicChunks.LOGGER.info("New worlds are configured to NOT generate as CC; no Cubic Chunks data will be created");
-//        }
-//    }
 }

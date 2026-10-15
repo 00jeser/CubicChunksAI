@@ -43,6 +43,7 @@ import io.github.opencubicchunks.cubicchunks.server.level.CloHolder;
 import io.github.opencubicchunks.cubicchunks.server.level.CloTrackingView;
 import io.github.opencubicchunks.cubicchunks.server.level.CubeHolder;
 import io.github.opencubicchunks.cubicchunks.server.level.CubicChunkMap;
+import io.github.opencubicchunks.cubicchunks.server.level.CubicTicking;
 import io.github.opencubicchunks.cubicchunks.server.level.GeneratingCubeMap;
 import io.github.opencubicchunks.cubicchunks.util.StaticCache3D;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.CloAccess;
@@ -403,7 +404,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
 
     @Inject(method = "prepareTickingChunk", at = @At("HEAD"), cancellable = true)
     private void cc_onVanillaPrepareTickingChunk(ChunkHolder chunk, CallbackInfoReturnable<CompletableFuture<ChunkResult<LevelClo>>> cir) {
-        if (((CloHolder) chunk).cc_getCloPos().isCube()) {
+        if (CubicTicking.preparesTickingCubes(((CanBeCubic) this.level).cc_isCubic(), ((CloHolder) chunk).cc_getCloPos().isCube())) {
             cir.setReturnValue(cc_prepareTickingChunk(chunk));
         }
     }
