@@ -32,7 +32,8 @@ import io.github.opencubicchunks.cc_core.utils.Coords;
 @UsedFromASM
 public class CubePos extends MCVec3i {
     /**
-     * long representing an invalid CubePos. This is the same value as {@link MCChunkPos#INVALID_CHUNK_POS} and {@link io.github.opencubicchunks.cc_core.world.level.CloPos#INVALID_CLO_POS}.
+     * long representing an invalid CubePos. This is {@link Long#MAX_VALUE}, the same value as {@link io.github.opencubicchunks.cc_core.world.level.CloPos#INVALID_CLO_POS}.
+     * Vanilla {@code ChunkPos.INVALID_CHUNK_POS} is a different marker and is not this value.
      */
     public static final long INVALID_CUBE_POS = Long.MAX_VALUE;
     public static final int MAX_COORDINATE_VALUE = Coords.blockToCube(33554431);
@@ -55,6 +56,15 @@ public class CubePos extends MCVec3i {
 
     public static CubePos of(int x, int y, int z) {
         return new CubePos(x, y, z);
+    }
+
+    /**
+     * E4: скопированное тело {@code GenerationChunkHolder} зовёт {@code ChunkPos.isValid()}.
+     * У куба проверка по трём осям и {@link #MAX_COORDINATE_VALUE}.
+     */
+    public boolean isValid() {
+        int max = MAX_COORDINATE_VALUE;
+        return Math.abs(this.getX()) <= max && Math.abs(this.getY()) <= max && Math.abs(this.getZ()) <= max;
     }
 
     @UsedFromASM
@@ -102,7 +112,7 @@ public class CubePos extends MCVec3i {
     }
 
     public static long asChunkPosLong(long cubePosIn, int localX, int localZ) {
-        return MCChunkPos.asLong(Coords.cubeToSection(CubePos.extractX(cubePosIn), localX), Coords.cubeToSection(CubePos.extractZ(cubePosIn), localZ));
+        return MCChunkPos.pack(Coords.cubeToSection(CubePos.extractX(cubePosIn), localX), Coords.cubeToSection(CubePos.extractZ(cubePosIn), localZ));
     }
 
     public MCChunkPos asChunkPos() {
@@ -122,7 +132,8 @@ public class CubePos extends MCVec3i {
     }
 
     public static CubePos from(MCChunkPos position, int yPos) {
-        return new CubePos(sectionToCube(position.x), yPos, sectionToCube(position.z));
+        long packed = position.pack();
+        return new CubePos(sectionToCube(MCChunkPos.getX(packed)), yPos, sectionToCube(MCChunkPos.getZ(packed)));
     }
 
     public static CubePos from(MCSectionPos sectionPos) {

@@ -8,7 +8,7 @@ Minecraft хранит мир колонками: чанк 16×16 блоков �
 
 Код делится на две части:
 
-- **CubicChunks** (`src/`) — мод под NeoForge. Миксины, DASM-наборы и пакеты мира подменяют ванильные классы Minecraft 1.21.6. Этот код знает про конкретную версию игры.
+- **CubicChunks** (`src/`) — мод под NeoForge. Миксины, DASM-наборы и пакеты мира подменяют ванильные классы Minecraft 26.1.2. Этот код знает про конкретную версию игры.
 - **CubicChunksCore** (`CubicChunksCore/`) — версионно-независимая библиотека. В ней координаты, константы размера куба, карта высот и заглушки типов Minecraft. Она не ссылается на классы `net.minecraft`.
 
 Старый порт лежит в `src_old/` и в сборку не входит.
@@ -44,7 +44,7 @@ Minecraft хранит мир колонками: чанк 16×16 блоков �
 
 `CubicChunksCore/build.gradle` — тот же скрипт, что в upstream-коммите. Он не портировался на NeoForge.
 
-- Java toolchain 17. Мод собирается toolchain 21. Оба резолвятся через Foojay (`settings.gradle`).
+- Java toolchain 25. Мод собирается toolchain 25. Оба резолвятся через Foojay (`settings.gradle`).
 - Зависимости `compileOnly`: `javaheaders-api` (JitPack `3e193a8`), Guava, Log4j, Netty, fastutil, jsr305, JetBrains annotations. В рантайм мода они не транзитятся (`transitive = false`).
 - `generatePackageInfo` дописывает отсутствующие `package-info.java` с `@ParametersAreNonnullByDefault` и `@MethodsReturnNonnullByDefault`. В импортированном дереве эти файлы уже есть.
 - JAR получает манифест `FMLModType: GAMELIBRARY`.

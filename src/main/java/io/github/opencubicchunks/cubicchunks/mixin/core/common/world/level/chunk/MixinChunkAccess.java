@@ -2,11 +2,11 @@ package io.github.opencubicchunks.cubicchunks.mixin.core.common.world.level.chun
 
 import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.CloAccess;
-import net.minecraft.core.Registry;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.LevelHeightAccessor;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.chunk.UpgradeData;
 import net.minecraft.world.level.levelgen.blending.BlendingData;
 import org.spongepowered.asm.mixin.Mixin;
@@ -20,8 +20,8 @@ public abstract class MixinChunkAccess implements CloAccess {
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void cc_onInit(
-            ChunkPos chunkPos, UpgradeData upgradeData, LevelHeightAccessor levelHeightAccessor, Registry biomeRegistry, long inhabitedTime,
-            LevelChunkSection[] sections, BlendingData blendingData, CallbackInfo ci
+            ChunkPos chunkPos, UpgradeData upgradeData, LevelHeightAccessor levelHeightAccessor, PalettedContainerFactory containerFactory,
+            long inhabitedTime, LevelChunkSection[] sections, BlendingData blendingData, CallbackInfo ci
     ) {
         cc_cloPos = CloPos.chunk(chunkPos);
     }

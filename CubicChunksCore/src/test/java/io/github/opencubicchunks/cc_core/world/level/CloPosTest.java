@@ -101,12 +101,12 @@ public class CloPosTest {
         assertEquals(CubePos.from(cubeLong), CloPos.fromLong(cubeLong).cubePos());
 
         var chunkLong = CloPos.chunkAsLong(x, z);
-        var expectedChunkLong = MCChunkPos.asLong(x, z);
+        var expectedChunkLong = MCChunkPos.pack(x, z);
 
         assertEquals(expectedChunkLong, chunkLong);
         assertEquals(MCChunkPos.getX(chunkLong), CloPos.extractX(chunkLong));
         assertEquals(MCChunkPos.getZ(chunkLong), CloPos.extractZ(chunkLong));
-        assertEquals(new MCChunkPos(chunkLong), CloPos.fromLong(chunkLong).chunkPos());
+        assertEquals(MCChunkPos.unpack(chunkLong), CloPos.fromLong(chunkLong).chunkPos());
     }
 
     // offsetX/Z should be between 0 and CubicConstants.DIAMETER_IN_SECTIONS

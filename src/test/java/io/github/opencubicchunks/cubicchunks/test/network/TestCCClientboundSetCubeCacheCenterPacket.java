@@ -31,7 +31,7 @@ public class TestCCClientboundSetCubeCacheCenterPacket extends BaseTest {
         assertDeepEquals(CCClientboundSetCubeCacheCenterPacket.STREAM_CODEC.decode(buf), packet);
     }
 
-    @Disabled // TODO disabled until we can apply client-side mixins in tests properly
+    @Disabled // E7: клиентские миксины сети в тестах ещё не применяются
     @Test
     public void handlerTest() {
         IPayloadContext payloadContextMock = mock(Mockito.RETURNS_DEEP_STUBS);

@@ -11,20 +11,20 @@ import io.github.opencubicchunks.cc_core.api.CubePos;
 import io.github.opencubicchunks.cc_core.api.CubicConstants;
 import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cubicchunks.testutils.BaseTest;
+import io.github.opencubicchunks.cubicchunks.testutils.Misc;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
-import net.minecraft.core.Registry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.LevelHeightAccessor;
-import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.chunk.UpgradeData;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.gameevent.GameEventListenerRegistry;
@@ -40,10 +40,10 @@ import org.junit.jupiter.api.TestInstance;
 public class TestCubeAccess extends BaseTest {
     static class CubeAccessTestImpl extends CubeAccess {
         CubeAccessTestImpl(
-                CubePos cubePos, UpgradeData upgradeData, LevelHeightAccessor levelHeightAccessor, Registry<Biome> biomeRegistry, long inhabitedTime,
-                @Nullable LevelChunkSection[] chunkSections, @Nullable BlendingData blendingData
+                CubePos cubePos, UpgradeData upgradeData, LevelHeightAccessor levelHeightAccessor, PalettedContainerFactory containerFactory,
+                long inhabitedTime, @Nullable LevelChunkSection[] chunkSections, @Nullable BlendingData blendingData
         ) {
-            super(cubePos, upgradeData, levelHeightAccessor, biomeRegistry, inhabitedTime, chunkSections, blendingData);
+            super(cubePos, upgradeData, levelHeightAccessor, containerFactory, inhabitedTime, chunkSections, blendingData);
         }
 
         @Override public GameEventListenerRegistry getListenerRegistry(int sectionY) {
@@ -105,7 +105,8 @@ public class TestCubeAccess extends BaseTest {
 
     private void findBlocks(Random random) {
         CubePos cubePos = CubePos.of(random.nextInt(20000) - 10000, random.nextInt(20000) - 10000, random.nextInt(20000) - 10000);
-        var cubeAccess = new CubeAccessTestImpl(cubePos, mock(), mock(), mock(), 0L, new LevelChunkSection[CubicConstants.SECTION_COUNT], mock());
+        var cubeAccess = new CubeAccessTestImpl(cubePos, mock(), mock(), Misc.palettedContainerFactory(), 0L,
+                new LevelChunkSection[CubicConstants.SECTION_COUNT], mock());
         Set<BlockPos> visitedPositions = new HashSet<>();
         Set<BlockPos> expectedPositions = new HashSet<>();
         for (int i = 0; i < 1000; i++) {

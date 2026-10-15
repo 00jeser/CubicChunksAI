@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -18,8 +19,10 @@ import java.util.Set;
 import io.github.opencubicchunks.cc_core.api.CubePos;
 import io.github.opencubicchunks.cc_core.api.CubicConstants;
 import io.github.opencubicchunks.cubicchunks.testutils.BaseTest;
+import io.github.opencubicchunks.cubicchunks.testutils.Misc;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -37,7 +40,7 @@ public class TestLevelCube extends BaseTest {
 
     private void simpleGetSetBlockState(Random random) {
         CubePos cubePos = CubePos.of(random.nextInt(20000) - 10000, random.nextInt(20000) - 10000, random.nextInt(20000) - 10000);
-        var cube = new LevelCube(mock(Answers.RETURNS_DEEP_STUBS), cubePos);
+        var cube = new LevelCube(levelWithPalette(), cubePos);
         Map<BlockPos, BlockState> states = new HashMap<>();
         for (int i = 0; i < 1000; i++) {
             var pos = cubePos.asBlockPos(random.nextInt(CubicConstants.DIAMETER_IN_BLOCKS), random.nextInt(CubicConstants.DIAMETER_IN_BLOCKS),
@@ -55,7 +58,7 @@ public class TestLevelCube extends BaseTest {
     // Mojang's fluid stuff is so jank and half-implemented
     private void fluidState(Random random) {
         CubePos cubePos = CubePos.of(random.nextInt(20000) - 10000, random.nextInt(20000) - 10000, random.nextInt(20000) - 10000);
-        var cube = new LevelCube(mock(Answers.RETURNS_DEEP_STUBS), cubePos);
+        var cube = new LevelCube(levelWithPalette(), cubePos);
         Set<BlockPos> positions = new HashSet<>();
         var state = Blocks.ANDESITE_SLAB.defaultBlockState().setValue(BlockStateProperties.WATERLOGGED, true);
         for (int i = 0; i < 100; i++) {
@@ -75,7 +78,7 @@ public class TestLevelCube extends BaseTest {
         CubePos cubePos = CubePos.of(random.nextInt(20000) - 10000, random.nextInt(20000) - 10000, random.nextInt(20000) - 10000);
         var pos = cubePos.asBlockPos(random.nextInt(CubicConstants.DIAMETER_IN_BLOCKS), random.nextInt(CubicConstants.DIAMETER_IN_BLOCKS),
                 random.nextInt(CubicConstants.DIAMETER_IN_BLOCKS));
-        var cube = new LevelCube(mock(Answers.RETURNS_DEEP_STUBS), cubePos);
+        var cube = new LevelCube(levelWithPalette(), cubePos);
         BlockState state1 = spy(Blocks.FURNACE.defaultBlockState());
         BlockState state2 = spy(Blocks.STONE.defaultBlockState());
 
@@ -89,6 +92,13 @@ public class TestLevelCube extends BaseTest {
         // FIXME need a new way to verify that block entity was removed
 //        verify(state1, times(1)).onRemove(any(), eq(pos), eq(state2), eq(false));
         verify(state2, times(1)).onPlace(any(), eq(pos), eq(state1), eq(false));
+    }
+
+    private static Level levelWithPalette() {
+        var factory = Misc.palettedContainerFactory();
+        Level level = mock(Answers.RETURNS_DEEP_STUBS);
+        when(level.palettedContainerFactory()).thenReturn(factory);
+        return level;
     }
 
     @Test

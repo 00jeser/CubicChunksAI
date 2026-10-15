@@ -16,6 +16,7 @@ import io.github.opencubicchunks.cubicchunks.CanBeCubic;
 import io.github.opencubicchunks.cubicchunks.client.multiplayer.ClientCubeCache;
 import io.github.opencubicchunks.cubicchunks.network.CCClientboundLevelCubeWithLightPacket;
 import io.github.opencubicchunks.cubicchunks.testutils.BaseTest;
+import io.github.opencubicchunks.cubicchunks.testutils.Misc;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import io.netty.buffer.Unpooled;
 import net.minecraft.client.multiplayer.ClientChunkCache;
@@ -31,6 +32,8 @@ public class TestCCClientboundLevelCubeWithLightPacket extends BaseTest {
     @Test
     public void serdeTest() {
         ClientLevel clientLevelMock = mock(Mockito.RETURNS_DEEP_STUBS);
+        var factory = Misc.palettedContainerFactory();
+        when(clientLevelMock.palettedContainerFactory()).thenReturn(factory);
         when(((CanBeCubic) clientLevelMock).cc_isCubic()).thenReturn(true);
         when(clientLevelMock.getHeight()).thenReturn(384);
         when(clientLevelMock.getSectionsCount()).thenReturn(24);
@@ -52,7 +55,7 @@ public class TestCCClientboundLevelCubeWithLightPacket extends BaseTest {
         assertDeepEquals(CCClientboundLevelCubeWithLightPacket.STREAM_CODEC.decode(buf2), packet2);
     }
 
-    @Disabled // TODO disabled until we can apply client-side mixins in tests properly
+    @Disabled // E7: клиентские миксины сети в тестах ещё не применяются
     @Test
     public void handlerTest() {
         IPayloadContext payloadContextMock = mock(Mockito.RETURNS_DEEP_STUBS);

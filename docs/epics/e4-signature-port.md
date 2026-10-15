@@ -1,11 +1,48 @@
 # E4 — Сигнатуры ванили 26.1
 
 **Этап ТЗ:** 1. Порт собирается  
-**Статус:** planned  
+**Статус:** done  
 **Зависимости:** [E3](e3-dasm-mixin.md)  
 **Следующий:** [E5](e5-world-style.md)
 
 Жёстко после E3. Список красных файлов — выход E3-S3. Сигнатуры брать из исходников NeoForge `26.1.2.116` в Gradle, не по памяти.
+
+## Вход из E3-S3
+
+`./gradlew compileJava` при `dasm` / `dasm-neoforge` `3.2.0` и NeoForge `26.1.2.116`: 28 файлов `src/main`, 96 ошибок. Ниже первая ошибка каждого файла. Эти файлы в E3 не чинились.
+
+| Файл | Строка | Первая ошибка |
+| --- | --- | --- |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/client/gui/render/pip/WorldLoadingCubeStatusesRenderer.java` | 16 | cannot find symbol `CachedPerspectiveProjectionMatrixBuffer` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/client/gui/render/state/pip/WorldLoadingCubeStatusesRenderState.java` | 7 | package `net.minecraft.client.gui.render.state.pip` does not exist |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/client/gui/screens/CubicLevelLoadingScreen.java` | 17 | cannot find symbol `GuiGraphics` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/network/CCClientboundForgetLevelCloPacket.java` | 12 | cannot find symbol `ResourceLocation` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/network/CCClientboundLevelChunkPacket.java` | 7 | cannot find symbol `ResourceLocation` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/network/CCClientboundSetCubeCacheCenterPacket.java` | 12 | cannot find symbol `ResourceLocation` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/network/CCClientboundLevelCubeWithLightPacket.java` | 21 | cannot find symbol `ResourceLocation` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/core/client/gui/screens/MixinLevelLoadingScreen.java` | 6 | cannot find symbol `GuiGraphics` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/core/common/server/MixinMinecraftServer.java` | 20 | cannot find symbol `GameRules` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/core/common/server/level/MixinPlayerRespawnLogic.java` | 6 | cannot find symbol `PlayerRespawnLogic` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/core/common/server/level/MixinServerChunkCache.java` | 44 | cannot find symbol `ChunkProgressListener` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/core/common/server/level/MixinChunkMap.java` | 55 | cannot find symbol `Util` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/core/common/world/level/chunk/storage/MixinChunkStorage.java` | 12 | cannot find symbol `ChunkStorage` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/core/common/server/level/MixinServerLevel.java` | 27 | cannot find symbol `ChunkProgressListener` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/core/common/server/level/progress/MixinProcessorChunkProgressListener.java` | 15 | cannot find symbol `ChunkProgressListener` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/core/common/server/level/progress/MixinLoggerChunkProgressListener.java` | 10 | cannot find symbol `LoggerChunkProgressListener` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/core/common/server/level/progress/MixinStoringChunkProgressListener.java` | 18 | cannot find symbol `StoringChunkProgressListener` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/dasmsets/GlobalSet.java` | 26 | cannot find symbol `ChunkProgressListener` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/dasmsets/ChunkToCloSet.java` | 37 | cannot find symbol `LoggerChunkProgressListener` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/client/gui/render/CCNeoForgeRenderingHooks.java` | 8 | cannot find symbol method `bus()` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/network/CCNetworkHandler.java` | 9 | cannot find symbol method `bus()` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/world/level/cube/CubeAccess.java` | 109 | no suitable constructor `LevelChunkSection(Registry<Biome>)` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/world/level/cube/LevelCube.java` | 220 | `isClientSide` has private access in `Level` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/world/level/chunklike/ProtoClo.java` | 37 | `Registry<Biome>` cannot be converted to `PalettedContainerFactory` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/config/ServerConfig.java` | 46 | cannot find symbol method `location()` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/core/common/world/level/MixinLevel.java` | 262 | cannot find symbol method `getMoonBrightness()` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/core/common/server/level/MixinPlayerTicketTracker.java` | 33 | cannot find symbol method `toLong()` |
+| `src/main/java/io/github/opencubicchunks/cubicchunks/mixin/core/common/server/level/MixinChunkGenerationTask.java` | 90 | cannot find symbol method `asLong(int,int)` |
+
+`ChunkToCubeSet`, `ChunkInCubicContextSet`, `SectionPosToCubeSet`, `SectionPosToChunkSet`, `ForgeSet` и `package-info` каталога `mixin/dasmsets` в этот список не входят. `GlobalSet` и `ChunkToCloSet` красные из-за исчезнувших ванильных типов в `@Ref`; импорты аннотаций DASM в E3 не менялись.
 
 ---
 

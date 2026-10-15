@@ -1,9 +1,26 @@
 import io.github.opencubicchunks.gradle.FixAnnotationsFormatterStep
 import io.github.opencubicchunks.gradle.GeneratePackageInfo
+import io.github.opencubicchunks.gradle.JavaHeadersLinkTransform
 
 buildscript {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+        maven { url 'https://jitpack.io' }
+    }
     dependencies {
         classpath("com.google.code.gson:gson:2.8.5")
+        // javaheaders stays 1.2.8. plugins {} cannot force its transitive ASM,
+        // and ASM 9.3 cannot read Java 25 class files (major 69).
+        classpath("io.github.opencubicchunks:javaheaders:1.2.8")
+    }
+    configurations.classpath {
+        resolutionStrategy.eachDependency { details ->
+            if (details.requested.group == 'org.ow2.asm') {
+                details.useVersion '9.9.1'
+                details.because 'javaheaders 1.2.8 ASM 9.3 cannot read Java 25 class files (major 69)'
+            }
+        }
     }
 }
 plugins {
@@ -13,11 +30,35 @@ plugins {
     id 'maven-publish'
     id("com.diffplug.spotless") version "7.0.4"
     id "checkstyle"
-    id 'net.neoforged.moddev' version '2.0.90'
-    id("io.github.opencubicchunks.javaheaders").version("1.2.8")
+    id 'net.neoforged.moddev' version '2.0.148'
     id("io.github.opencubicchunks.gradle.mcGitVersion")
     id("io.github.opencubicchunks.gradle.mixingen")
     id("io.github.opencubicchunks.gradle.dasmgen")
+}
+
+// javaheaders 1.2.8 stays the transformer. It is not applied as a plugin: Gradle's
+// worker classpath exposes ASM 9.8, which rejects class major 69, and plugins {}
+// cannot force the plugin's ASM. JavaHeadersLinkTransform loads ASM 9.9.1 first.
+def javaHeadersLinked = Attribute.of('javaHeadersLinked', Boolean)
+def javaHeadersArtifactType = Attribute.of('artifactType', String)
+configurations.all {
+    if (canBeResolved) {
+        attributes.attribute(javaHeadersLinked, true)
+    }
+}
+dependencies.attributesSchema.attribute(javaHeadersLinked)
+dependencies.artifactTypes.jar.attributes.attribute(javaHeadersLinked, false)
+dependencies.registerTransform(JavaHeadersLinkTransform) { spec ->
+    spec.from.attribute(javaHeadersLinked, false).attribute(javaHeadersArtifactType, 'jar')
+    spec.to.attribute(javaHeadersLinked, true).attribute(javaHeadersArtifactType, 'jar')
+    spec.parameters.config.set(layout.projectDirectory.file('javaHeaders.json'))
+    spec.parameters.acceptedJars.set('.*CubicChunksCore.*')
+    spec.parameters.toolClasspath.from(buildscript.configurations.classpath.files.findAll { jar ->
+        def n = jar.name
+        (n.startsWith('asm-') || n.startsWith('javaheaders-') || n.startsWith('dasm-')
+                || n.startsWith('guava-') || n.startsWith('failureaccess-')
+                || n.startsWith('commons-lang3-') || n.startsWith('gson-2.9'))
+    })
 }
 
 version = mod_version
@@ -25,12 +66,6 @@ group = mod_group_id
 
 base {
     archivesName.set(mod_name)
-}
-
-javaHeaders {
-    setAcceptedJars(".*CubicChunksCore.*")
-    setConfig(file("javaHeaders.json"))
-    // setDebug(debugArtifactTransforms.toBoolean())
 }
 
 mcGitVersion {
@@ -83,7 +118,7 @@ mixinGen {
     filePattern = "cubicchunks.mixins.%s.json"
     defaultRefmap = "CubicChunks-refmap.json"
     defaultPackagePrefix = "io.github.opencubicchunks.cubicchunks.mixin"
-    defaultCompatibilityLevel = "JAVA_21"
+    defaultCompatibilityLevel = "JAVA_25"
     defaultMinVersion = "0.8"
 
     config(sourceSets.main, "core") {
@@ -157,14 +192,10 @@ base {
     archivesName = mod_id
 }
 
-java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 neoForge {
     version = project.neo_version
-    parchment {
-        mappingsVersion = project.parchment_mappings_version
-        minecraftVersion = project.parchment_minecraft_version
-    }
     validateAccessTransformers = true
 
     runs {
@@ -206,18 +237,18 @@ neoForge {
 
         client {
             client()
-            systemProperty 'forge.enabledGameTestNamespaces', project.mod_id
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
         server {
             server()
-            systemProperty 'forge.enabledGameTestNamespaces', project.mod_id
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
             programArgument '--nogui'
         }
 
         gameTestServer {
             type = "gameTestServer"
-            systemProperty 'forge.enabledGameTestNamespaces', project.mod_id
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
         clientData {
@@ -248,8 +279,17 @@ neoForge {
 configurations {
     libraries {}
     implementation.extendsFrom libraries
-    additionalRuntimeClasspath.extendsFrom libraries
     extraTests
+    coreHeaderJar {
+        canBeResolved = true
+        canBeConsumed = false
+        attributes {
+            attribute(javaHeadersLinked, true)
+            attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements, LibraryElements.JAR))
+        }
+    }
+    dasmNeoforgeOriginal
+    dasmPatchCompile
 }
 
 // Include resources generated by data generators.
@@ -267,6 +307,36 @@ repositories {
     //}
 }
 
+def compileDasmPatch = tasks.register('compileDasmPatch', JavaCompile) {
+    source = fileTree(dir: 'gradle/dasm-fml-patch', include: '**/*.java')
+    classpath = configurations.dasmPatchCompile
+    destinationDirectory = layout.buildDirectory.dir('dasm/classes')
+    options.release.set(21)
+    options.compilerArgs.add('-proc:none')
+}
+
+tasks.register('patchDasmNeoforge') {
+    dependsOn compileDasmPatch
+    def outFile = layout.buildDirectory.file('dasm/dasm-neoforge-3.2.0-fml.jar')
+    inputs.files(configurations.dasmNeoforgeOriginal)
+    inputs.dir(compileDasmPatch.flatMap { it.destinationDirectory })
+    outputs.file(outFile)
+    doLast {
+        def dest = outFile.get().asFile
+        dest.parentFile.mkdirs()
+        java.nio.file.Files.copy(
+                configurations.dasmNeoforgeOriginal.singleFile.toPath(),
+                dest.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+        )
+        ant.jar(update: true, destfile: dest) {
+            fileset(dir: compileDasmPatch.get().destinationDirectory.get().asFile) {
+                include(name: 'io/github/notstirred/dasm/mod/BaseConfigPlugin*.class')
+            }
+        }
+    }
+}
+
 dependencies {
     implementation(project(":CubicChunksCore")) {
         attributes {
@@ -277,9 +347,17 @@ dependencies {
     extraTests(project(":CubicChunksCore")) {
         targetConfiguration = "testArchivesOutput"
     }
-
+    coreHeaderJar(project(":CubicChunksCore")) {
+        transitive = false
+    }
     compileOnly("io.github.notstirred:dasm:3.2.0:api")
-    runtimeOnly(jarJar("io.github.notstirred:dasm-neoforge:3.2.0"))
+    dasmNeoforgeOriginal("io.github.notstirred:dasm-neoforge:3.2.0")
+    dasmPatchCompile("io.github.notstirred:dasm-neoforge:3.2.0")
+    dasmPatchCompile("net.fabricmc:sponge-mixin:0.17.4+mixin.0.8.7")
+    dasmPatchCompile("org.apache.logging.log4j:log4j-api:2.25.2")
+    dasmPatchCompile("org.ow2.asm:asm:9.9.1")
+    dasmPatchCompile("org.ow2.asm:asm-tree:9.9.1")
+    runtimeOnly(jarJar(files(tasks.named("patchDasmNeoforge"))))
 
     libraries("io.github.opencubicchunks:regionlib:0.63.0-SNAPSHOT")
     libraries("org.spongepowered:noise:2.0.0-SNAPSHOT")
@@ -289,6 +367,10 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-params:5.10.0")
     testImplementation("org.mockito:mockito-core:5.2.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")
+    testImplementation("org.junit.platform:junit-platform-suite-api:1.10.0")
+    testRuntimeOnly("org.junit.platform:junit-platform-suite-engine:1.10.0")
+    // Gradle 9 does not put the platform launcher on the test worker classpath.
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.0")
 
     testImplementation("org.hamcrest:hamcrest-junit:2.0.0.0")
     testImplementation("org.hamcrest:hamcrest:2.2")
@@ -300,7 +382,6 @@ tasks.withType(ProcessResources).configureEach {
     var replaceProperties = [
             minecraft_version   : minecraft_version, minecraft_version_range: minecraft_version_range,
             neo_version         : neo_version, neo_version_range: neo_version_range,
-            loader_version_range: loader_version_range,
             mod_id              : mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
             mod_authors         : mod_authors, mod_description: mod_description,
     ]
@@ -322,22 +403,44 @@ processResources.dependsOn(genAll, "CubicChunksCore:assemble")
 // Force core to be built before the main project
 compileJava.dependsOn("CubicChunksCore:assemble")
 
-// unzipping subproject (CubicChunksCore) tests
-// TODO disabled until we figure out how to fix java modules complaining
-//tasks.register('unzipTests', Copy) {
-//    outputs.upToDateWhen {
-//        false
-//    }
-//    dependsOn(configurations.named("extraTests"))
-//    from(configurations.named("extraTests"))
-//    doFirst {
-//        //noinspection ConfigurationAvoidance, we actually do want to resolve here
-//        var testsFile = configurations["extraTests"].resolve().iterator().next()
-//        from(zipTree(testsFile))
-//        exclude(testsFile.name)
-//    }
-//    into(sourceSets.test.output.classesDirs.asPath)
-//}
+// Unzip CubicChunksCore tests beside the mod test classes. They are loaded from
+// core-test-library; leaving them in the mod classes directory would split cc_core.
+tasks.register('unzipTests', Copy) {
+    outputs.upToDateWhen { false }
+    dependsOn(configurations.named('extraTests'))
+    from {
+        def testsFile = configurations.extraTests.resolve().iterator().next()
+        zipTree(testsFile)
+    }
+    exclude 'io/github/opencubicchunks/cc_core/minecraft/**'
+    into(layout.buildDirectory.dir('core-unpacked-tests'))
+}
+
+tasks.named('unzipTests').configure {
+    mustRunAfter 'cleanTest', 'compileTestJava'
+}
+
+// One gamelibrary jar: transformed core plus transformed core tests. Two jars would
+// split cc_core packages under FancyModLoader, and loose class files are invisible to it.
+tasks.register('coreTestLibrary', Jar) {
+    dependsOn(configurations.coreHeaderJar, configurations.extraTests)
+    // zipTree() inside from {} is not a task input, so a new header jar left this task UP-TO-DATE.
+    inputs.files(configurations.coreHeaderJar, configurations.extraTests)
+    archiveFileName.set('core-test-library.jar')
+    destinationDirectory.set(layout.buildDirectory.dir('libs'))
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes 'FMLModType': 'GAMELIBRARY'
+    }
+    from {
+        zipTree(configurations.coreHeaderJar.singleFile)
+    }
+    from {
+        zipTree(configurations.extraTests.singleFile)
+    }
+    exclude 'META-INF/MANIFEST.MF'
+    exclude 'io/github/opencubicchunks/cc_core/minecraft/**'
+}
 
 tasks.withType(Test).configureEach {
     // gradle docs suggest processors/2 which actually runs fractionally faster than just processors
@@ -349,7 +452,7 @@ test {
     minHeapSize = "512M"
     maxHeapSize = "2048M"
 
-//    dependsOn(project.tasks.named("unzipTests"))
+    dependsOn('unzipTests')
     useJUnitPlatform {
         excludeTags "longRunTest"
     }
@@ -362,8 +465,24 @@ test {
         events("passed", "skipped", "failed")
     }
 
-    jvmArgs("-ea", "-Dmixin.debug.verbose=true", "-Dmixin.debug.export=true", "-Dmixin.checks.interfaces=true")
+    // Mockito's Byte Buddy rejects class version 69 unless this flag is set.
+    jvmArgs("-ea", "-Dmixin.debug.verbose=true", "-Dmixin.debug.export=true", "-Dmixin.checks.interfaces=true", "-Dnet.bytebuddy.experimental=true")
     exclude "**/mixin*"
+}
+
+// Core tests ship in core-test-library (FancyModLoader ignores loose class files).
+// Mod tests compile against the mod classes. The NeoForge mod-folder provider loads
+// src/main and src/test as one mod, so mixins apply and test classes are visible.
+gradle.projectsEvaluated {
+    tasks.named('compileTestJava', JavaCompile).configure {
+        classpath = configurations.testCompileClasspath + sourceSets.main.output + configurations.extraTests
+    }
+    tasks.named('test', Test).configure {
+        dependsOn('coreTestLibrary')
+        classpath = files(tasks.named('coreTestLibrary', Jar).flatMap { it.archiveFile }) + configurations.testRuntimeClasspath.filter { File jar ->
+            !jar.name.contains('CubicChunksCore')
+        }
+    }
 }
 
 // TODO longRunTest is disabled for now because MDG doesn't support multiple test tasks

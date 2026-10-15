@@ -44,7 +44,7 @@ public class TestCubicServerLevel extends BaseTest {
 
     // TODO: Stub. This test hangs. Maybe due to ForcedChunksSavedData?
     @Test
-    @Disabled
+    @Disabled // E6: живой сервер и принудительные чанки
     public void testVanillaSetChunkForced() throws Exception {
         try (CloseableReference<ServerLevel> serverLevelReference = setupServerLevel()) {
             serverLevelReference.value().setChunkForced(0, 0, true);

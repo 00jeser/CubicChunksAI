@@ -15,7 +15,7 @@ public abstract class MixinProtoCube {
      */
     @Dynamic @Redirect(method = { "markPosForPostprocessing", "getBlockState",
         "getFluidState" }, at = @At(value = "INVOKE", target = "Lio/github/opencubicchunks/cubicchunks"
-                + "/world/level/cube/ProtoCube;getSectionIndex(I)I"))
+                + "/world/level/cube/ProtoCube;getSectionIndex(I)I"), require = 0)
     private int cc_onGetBlockState_SectionIndex(ProtoCube instance, int i, BlockPos pos) {
         return Coords.blockToIndex(pos);
     }

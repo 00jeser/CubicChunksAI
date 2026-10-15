@@ -14,16 +14,28 @@ import java.util.concurrent.CompletableFuture;
 
 import javax.annotation.Nullable;
 
+import com.mojang.serialization.Lifecycle;
 import io.github.opencubicchunks.cc_core.api.CubePos;
 import io.github.opencubicchunks.cc_core.api.CubicConstants;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
+import net.minecraft.core.Holder;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.core.Registry;
 import net.minecraft.core.Vec3i;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.progress.LoggerChunkProgressListener;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.chunk.PalettedContainer;
+import net.minecraft.world.level.chunk.PalettedContainerFactory;
+import net.minecraft.world.level.chunk.Strategy;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.storage.LevelStorageSource;
@@ -33,14 +45,34 @@ import org.mockito.Mockito;
 
 // TODO maybe split things off of this class instead of dumping everything in here?
 public class Misc {
+    private static PalettedContainerFactory palettedContainerFactory;
+
     private Misc() {}
+
+    /**
+     * E4: секции куба строятся из {@link PalettedContainerFactory}, а биомы больше не лежат в {@code BuiltInRegistries}.
+     * Для set/get блоков достаточно одного держателя биома и настоящей палитры состояний.
+     */
+    public static PalettedContainerFactory palettedContainerFactory() {
+        if (palettedContainerFactory == null) {
+            Strategy<BlockState> blockStates = Strategy.createForBlockStates(Block.BLOCK_STATE_REGISTRY);
+            BlockState air = Blocks.AIR.defaultBlockState();
+            MappedRegistry<Biome> biomes = new MappedRegistry<>(Registries.BIOME, Lifecycle.stable());
+            ResourceKey<Biome> plains = ResourceKey.create(Registries.BIOME, Identifier.fromNamespaceAndPath("minecraft", "plains"));
+            Holder.Reference<Biome> holder = Registry.registerForHolder(biomes, plains, mock(Biome.class));
+            Strategy<Holder<Biome>> biomeStrategy = Strategy.createForBiomes(biomes.asHolderIdMap());
+            palettedContainerFactory = new PalettedContainerFactory(blockStates, air, PalettedContainer.codecRW(BlockState.CODEC, blockStates, air),
+                    biomeStrategy, holder, PalettedContainer.codecRO(biomes.holderByNameCodec(), biomeStrategy, holder));
+        }
+        return palettedContainerFactory;
+    }
 
     public static int chebyshevDistance(Vec3i a, Vec3i b) {
         return Math.max(Math.max(Math.abs(a.getX() - b.getX()), Math.abs(a.getY() - b.getY())), Math.abs(a.getZ() - b.getZ()));
     }
 
     public static int chebyshevDistance(ChunkPos a, ChunkPos b) {
-        return Math.max(Math.abs(a.x - b.x), Math.abs(a.z - b.z));
+        return Math.max(Math.abs(a.x() - b.x()), Math.abs(a.z() - b.z()));
     }
 
     public static CloseableReference<ServerLevel> setupServerLevel() {
@@ -63,15 +95,16 @@ public class Misc {
                 // We run everything on the main thread as Mockito has race conditions when multiple threads call into it
                 // (which occurs when using RETURNS_DEEP_STUBS)
                 Runnable::run, levelStorageAccessMock, mock(RETURNS_DEEP_STUBS), mock(RETURNS_DEEP_STUBS), levelStemMock,
-                // Need to mock an implementation of the interface, so that it also implements CloProgressListener
-                Mockito.<LoggerChunkProgressListener>mock(RETURNS_DEEP_STUBS), false, 0, List.of(), false, mock(RETURNS_DEEP_STUBS)),
-                randomStateMockedStatic);
+                // E4: ChunkProgressListener больше не аргумент конструктора ServerLevel.
+                false, 0, List.of(), false), randomStateMockedStatic);
     }
 
     /**
      * Generate a LevelCube filled with random stone and dirt blocks
      */
     public static LevelCube generateRandomLevelCube(Level level, CubePos pos, Random random) {
+        var factory = palettedContainerFactory();
+        when(level.palettedContainerFactory()).thenReturn(factory);
         var cube = new LevelCube(level, pos);
         for (int i = 0; i < CubicConstants.SECTION_COUNT; i++) {
             var section = cube.getSection(i);

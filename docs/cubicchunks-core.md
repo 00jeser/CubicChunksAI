@@ -36,7 +36,7 @@
 
 `CubePos` — неизменяемая тройка целых координат куба. Наследует заглушку `MCVec3i`. Фабрики: `of(x, y, z)`, конструктор из `long`, конструктор из `MCBlockPos` (блок переводится в куб через `Coords.blockToCube`).
 
-Упаковка в `long` — 21 бит на ось. Два старших бита отличают куб от чанка: XOR этих битов равен 1 у куба (`0b01` или `0b10`) и 0 у чанка. Перед записью старшие два бита инвертируются, иначе `Long.MAX_VALUE` был бы валидной позицией (−1, −1, −1). `INVALID_CUBE_POS` равен `Long.MAX_VALUE` и совпадает с невалидными `MCChunkPos` и `CloPos`.
+Упаковка в `long` — 21 бит на ось. Два старших бита отличают куб от чанка: XOR этих битов равен 1 у куба (`0b01` или `0b10`) и 0 у чанка. Перед записью старшие два бита инвертируются, иначе `Long.MAX_VALUE` был бы валидной позицией (−1, −1, −1). `INVALID_CUBE_POS` и `CloPos.INVALID_CLO_POS` равны `Long.MAX_VALUE`. Ванильный `ChunkPos.INVALID_CHUNK_POS` — другой маркер, `pack(1875066, 1875066)`, и в заголовок не копируется.
 
 `MAX_COORDINATE_VALUE` — максимальная координата куба, которую можно упаковать (блок 33 554 431, переведённый в куб). `ZERO` — куб (0, 0, 0). `getChessboardDistance` — чебышёвское расстояние до другого куба.
 
@@ -48,7 +48,7 @@
 
 Фабрики: `cube(x, y, z)`, `cube(CubePos)`, `cube(MCBlockPos)`, `chunk(x, z)`, `chunk(MCChunkPos)`, `section(MCSectionPos)` (секция переводится в содержащий её куб).
 
-Упакованный `long` использует ту же схему старших битов, что `CubePos` и ванильный `ChunkPos.toLong`. Методы `chunkAsLong` и `cubeAsLong` пишут соответствующий формат. Разбор идёт обратно в `CubePos` или `MCChunkPos`.
+Упакованный `long` колонки совпадает с ванильным `ChunkPos.pack` (`MCChunkPos.pack(int, int)`, обратно `MCChunkPos.unpack(long)`). Куб пишет `CubePos.asLong`. Методы `chunkAsLong` и `cubeAsLong` пишут соответствующий формат. Разбор идёт обратно в `CubePos` или `MCChunkPos`. `CloPos.toLong()` остаётся отдельным методом для DASM и не является упаковкой чанка.
 
 ### Заглушки Minecraft — пакет `minecraft`
 
@@ -66,7 +66,7 @@
 | `MCSectionPos` | `SectionPos` |
 | `MCVec3i` | `Vec3i` |
 
-Таблица соответствий — корневой `javaHeaders.json`. Пока трансформ не применён, вызов метода заглушки невозможен: конструкторы бросают `IllegalStateException`, методы объявлены `native`.
+Таблица соответствий — корневой `javaHeaders.json`. Плагин сводит методы по имени: у `MCChunkPos` это `pack` / `unpack` / `getX` / `getZ`, у `MCLevelHeightAccessor` — `getMinY` / `getMaxY`. Поля record `ChunkPos` закрыты, а одноимённый аксессор javaheaders переписывает в `getfield`, поэтому координаты экземпляра читаются через публичные `pack()` и `getX` / `getZ`. Пока трансформ не применён, вызов метода заглушки невозможен: конструкторы бросают `IllegalStateException`, методы объявлены `native`.
 
 ### Карта высот
 
@@ -129,4 +129,4 @@
 
 ## Тесты
 
-Тесты лежат в `CubicChunksCore/src/test` и покрывают `CubePos`, `CloPos`, `Coords`, `Int3HashSet` и узлы карты высот. Задача `test` подпроекта выключена: без классов Minecraft после трансформа javaheaders они не запускаются. JAR с классификатором `tests` собирает задача `testsJar` и отдаётся родителю конфигурацией `testArchivesOutput`.
+Тесты лежат в `CubicChunksCore/src/test` и покрывают `CubePos`, `CloPos`, `Coords`, `Int3HashSet` и узлы карты высот. Задача `test` подпроекта выключена: без классов Minecraft после трансформа javaheaders они не запускаются. JAR с классификатором `tests` собирает задача `testsJar` и отдаёт его родителю конфигурацией `testArchivesOutput`. Родитель распаковывает этот JAR задачей `unzipTests` (без заглушек `minecraft/**`) и запускает тесты ядра своим `test`.
