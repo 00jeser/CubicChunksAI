@@ -128,8 +128,7 @@ public class DasmGenExtension {
         });
     }
 
-    private void writeDasm(SourceSet sourceSet, String name, DasmConfig config, JsonWriter writer)
-            throws IOException {
+    private void writeDasm(SourceSet sourceSet, String name, DasmConfig config, JsonWriter writer) throws IOException {
         Set<String> dasmTypes = getDasmClasses(config, sourceSet.getAllJava());
 
         Set<Path> classesSet = new HashSet<>();

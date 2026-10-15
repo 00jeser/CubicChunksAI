@@ -14,6 +14,7 @@ import java.util.Set;
 import io.github.opencubicchunks.cc_core.api.CubePos;
 import io.github.opencubicchunks.cc_core.api.CubicConstants;
 import io.github.opencubicchunks.cubicchunks.testutils.BaseTest;
+import io.github.opencubicchunks.cubicchunks.testutils.Misc;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.ProtoCube;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.LevelHeightAccessor;
@@ -33,7 +34,7 @@ public class TestProtoCube extends BaseTest {
         when(heightAccessor.getMaxY()).thenReturn(1 << 24);
         when(heightAccessor.getHeight()).thenReturn(1 << 25);
         when(heightAccessor.isOutsideBuildHeight(any())).thenReturn(false);
-        return new ProtoCube(cubePos, mock(Answers.RETURNS_DEEP_STUBS), heightAccessor, mock(Answers.RETURNS_DEEP_STUBS),
+        return new ProtoCube(cubePos, mock(Answers.RETURNS_DEEP_STUBS), heightAccessor, Misc.palettedContainerFactory(),
                 mock(Answers.RETURNS_DEEP_STUBS));
     }
 

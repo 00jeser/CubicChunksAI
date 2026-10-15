@@ -13,12 +13,14 @@ import io.github.opencubicchunks.cubicchunks.client.gui.render.state.pip.WorldLo
 import io.github.opencubicchunks.cubicchunks.client.gui.screens.CubicLevelLoadingScreen;
 import io.github.opencubicchunks.cubicchunks.server.level.progress.StoringCloProgressListener;
 import net.minecraft.client.gui.render.pip.PictureInPictureRenderer;
-import net.minecraft.client.renderer.CachedPerspectiveProjectionMatrixBuffer;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.Projection;
+import net.minecraft.client.renderer.ProjectionMatrixBuffer;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderSetup;
+import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.core.Direction;
-import net.minecraft.server.level.progress.StoringChunkProgressListener;
+import net.minecraft.server.level.progress.ChunkLoadStatusView;
 import net.minecraft.util.ARGB;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import org.joml.Vector3f;
@@ -30,13 +32,15 @@ public class WorldLoadingCubeStatusesRenderer extends PictureInPictureRenderer<W
     // "I want to essentially get rid of RenderType as a concept" - Dinnerbone
     // so this will probably be obsolete soon
     public static final RenderType WORLD_LOADING_CUBE_STATUSES = RenderType.create("cubicchunks_loading_cube_statuses",
-            RenderType.TRANSIENT_BUFFER_SIZE, false, true, RenderPipelines.GUI, RenderType.CompositeState.builder().createCompositeState(false));
+            RenderSetup.builder(RenderPipelines.GUI).bufferSize(RenderType.TRANSIENT_BUFFER_SIZE).sortOnUpload().createRenderSetup());
 
     // PictureInPictureRenderer defaults to an orthographic projection matrix, so we make our own perspective projection matrix
-    private final CachedPerspectiveProjectionMatrixBuffer perspectiveProjectionMatrixBuffer = new CachedPerspectiveProjectionMatrixBuffer(
-            "world loading cubes", 0.05F, 100F);
+    private final ProjectionMatrixBuffer perspectiveProjectionMatrixBuffer = new ProjectionMatrixBuffer("world loading cubes");
+    private final Projection projection = new Projection();
 
     private static final float FOV_DEGREES = 60F;
+    private static final float PROJECTION_NEAR = 0.05F;
+    private static final float PROJECTION_FAR = 100F;
 
     /** Distance between the center of the loading animation and the camera */
     private static final float CAMERA_DISTANCE = 20F;
@@ -79,7 +83,8 @@ public class WorldLoadingCubeStatusesRenderer extends PictureInPictureRenderer<W
     @Override protected void renderToTexture(WorldLoadingCubeStatusesRenderState state, PoseStack poseStackUnused) {
         int width = state.x1() - state.x0();
         int height = state.y1() - state.y0();
-        RenderSystem.setProjectionMatrix(perspectiveProjectionMatrixBuffer.getBuffer(width, height, FOV_DEGREES), ProjectionType.PERSPECTIVE);
+        projection.setupPerspective(PROJECTION_NEAR, PROJECTION_FAR, FOV_DEGREES, width, height);
+        RenderSystem.setProjectionMatrix(perspectiveProjectionMatrixBuffer.getBuffer(projection), ProjectionType.PERSPECTIVE);
 
         // The PoseStack passed to this method is set up for the orthographic projection matrix;
         // as we're using perspective projection instead, we set up our own PoseStack.
@@ -97,21 +102,19 @@ public class WorldLoadingCubeStatusesRenderer extends PictureInPictureRenderer<W
         return "world loading cube statuses";
     }
 
-    private static void renderCubesAndChunks(
-            VertexConsumer vertexConsumer, PoseStack poseStack, StoringChunkProgressListener progressListener, float scale
-    ) {
-        int sectionRenderRadius = progressListener.getDiameter();
+    private static void renderCubesAndChunks(VertexConsumer vertexConsumer, PoseStack poseStack, ChunkLoadStatusView progressListener, float scale) {
+        int sectionRenderRadius = progressListener.radius() * 2 + 1;
         drawChunks(vertexConsumer, poseStack, progressListener, scale, sectionRenderRadius);
         drawCubes(vertexConsumer, poseStack, progressListener, scale, Coords.sectionToCubeCeil(sectionRenderRadius));
 
     }
 
     private static void drawChunks(
-            VertexConsumer vertexConsumer, PoseStack poseStack, StoringChunkProgressListener progressListener, float scale, int sectionRenderRadius
+            VertexConsumer vertexConsumer, PoseStack poseStack, ChunkLoadStatusView progressListener, float scale, int sectionRenderRadius
     ) {
         for (int cdx = 0; cdx < sectionRenderRadius; cdx++) {
             for (int cdz = 0; cdz < sectionRenderRadius; cdz++) {
-                ChunkStatus columnStatus = progressListener.getStatus(cdx, cdz);
+                ChunkStatus columnStatus = progressListener.get(cdx, cdz);
                 if (columnStatus == null) {
                     continue;
                 }
@@ -125,11 +128,14 @@ public class WorldLoadingCubeStatusesRenderer extends PictureInPictureRenderer<W
     }
 
     private static void drawCubes(
-            VertexConsumer vertexConsumer, PoseStack poseStack, StoringChunkProgressListener progressListener, float scale, int cubeRenderRadius
+            VertexConsumer vertexConsumer, PoseStack poseStack, ChunkLoadStatusView progressListener, float scale, int cubeRenderRadius
     ) {
         EnumSet<Direction> renderFaces = EnumSet.noneOf(Direction.class);
 
-        var tracker = (StoringCloProgressListener) progressListener;
+        // E4: карта статусов куба больше не лежит на ванильном слушателе.
+        if (!(progressListener instanceof StoringCloProgressListener tracker)) {
+            return;
+        }
         for (int dx = -1; dx <= cubeRenderRadius + 1; dx++) {
             for (int dz = -1; dz <= cubeRenderRadius + 1; dz++) {
                 for (int dy = -1; dy <= cubeRenderRadius + 1; dy++) {

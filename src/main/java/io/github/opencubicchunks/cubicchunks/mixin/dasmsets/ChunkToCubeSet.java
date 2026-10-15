@@ -78,22 +78,33 @@ public interface ChunkToCubeSet extends GlobalSet {
         @FieldRedirect("INVALID_CHUNK_POS:J")
         static final long INVALID_CUBE_POS = Long.MAX_VALUE;
 
-        @FieldToMethodRedirect("x:I")
+        // E4: x/z стали private-полями record. Чужой код зовёт x()/z().
+        @MethodRedirect("x()I")
         native int getX();
 
-        @FieldToMethodRedirect("z:I")
+        @MethodRedirect("z()I")
         native int getZ();
 
-        @MethodRedirect("toLong()J")
+        // E4: toLong() переименован в pack().
+        @MethodRedirect("pack()J")
         native long asLong();
+
+        // E4: pack(BlockPos) — кубовый asLong(BlockPos).
+        @MethodRedirect("pack(Lnet/minecraft/core/BlockPos;)J")
+        static native long asLong(net.minecraft.core.BlockPos pos);
 
         // Dummy methods that throw errors; these should be manually redirected to the correct x,y,z methods using mixin.
         // (See: MixinCubePos)
         @ConstructorToFactoryRedirect("<init>(II)V")
         static native CubePos dummy_fromChunkCoords(int x, int z);
 
-        @MethodRedirect("asLong(II)J")
+        // E4: asLong(II) переименован в pack(II).
+        @MethodRedirect("pack(II)J")
         static native long dummy_chunkAsLong(int x, int z);
+
+        // E4: new ChunkPos(long) снят. Распаковка куба — CubePos.from.
+        @MethodRedirect("unpack(J)Lnet/minecraft/world/level/ChunkPos;")
+        static native CubePos from(long packed);
     }
 
     @TypeRedirect(from = @Ref(ChunkAccess.class), to = @Ref(CubeAccess.class))

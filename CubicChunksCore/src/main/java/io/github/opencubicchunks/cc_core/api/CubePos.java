@@ -58,6 +58,15 @@ public class CubePos extends MCVec3i {
         return new CubePos(x, y, z);
     }
 
+    /**
+     * E4: скопированное тело {@code GenerationChunkHolder} зовёт {@code ChunkPos.isValid()}.
+     * У куба проверка по трём осям и {@link #MAX_COORDINATE_VALUE}.
+     */
+    public boolean isValid() {
+        int max = MAX_COORDINATE_VALUE;
+        return Math.abs(this.getX()) <= max && Math.abs(this.getY()) <= max && Math.abs(this.getZ()) <= max;
+    }
+
     @UsedFromASM
     public long asLong() {
         long i = 0L;

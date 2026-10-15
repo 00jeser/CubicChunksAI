@@ -19,6 +19,8 @@ import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.ProtoCube;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.debug.DebugValueSource;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ImposterProtoChunk;
@@ -103,7 +105,9 @@ public class TestVanillaCubicParity extends BaseTest {
                 ChunkAccess.class.getDeclaredMethod("writeAttachmentsToNBT", HolderLookup.Provider.class),
                 ChunkAccess.class.getDeclaredMethod("readAttachmentsFromNBT", HolderLookup.Provider.class, CompoundTag.class),
                 ChunkAccess.class.getDeclaredMethod("getAttachmentHolder"), LevelChunk.class.getMethod("getAuxLightManager", ChunkPos.class),
-                LevelChunk.class.getMethod("setUnsavedListener", LevelChunk.UnsavedListener.class)),
+                LevelChunk.class.getMethod("setUnsavedListener", LevelChunk.UnsavedListener.class),
+                // E4: отладочный хук 26.1.2, у куба своего регистратора нет.
+                LevelChunk.class.getMethod("registerDebugValues", ServerLevel.class, DebugValueSource.Registration.class)),
                 Arrays.stream(IAttachmentHolder.class.getMethods())));
         testStaticParity(LevelChunk.class, LevelCube.class);
     }

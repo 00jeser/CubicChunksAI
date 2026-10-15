@@ -3,6 +3,8 @@ package io.github.opencubicchunks.cc_core.world.level;
 import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.LongConsumer;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import io.github.opencubicchunks.cc_core.annotation.UsedFromASM;
 import io.github.opencubicchunks.cc_core.api.CubePos;
@@ -150,6 +152,24 @@ public class CloPos {
     @UsedFromASM
     public long toLong() {
         return asLong();
+    }
+
+    /**
+     * E4: {@code ChunkPos.rangeClosed} после подмены типа зовёт этот метод.
+     * Для колонки — квадрат чанков, для куба — куб кубов.
+     */
+    public static Stream<CloPos> rangeClosed(CloPos center, int radius) {
+        if (!center.isCube()) {
+            int x0 = center.getX();
+            int z0 = center.getZ();
+            return IntStream.rangeClosed(x0 - radius, x0 + radius).boxed()
+                    .flatMap(x -> IntStream.rangeClosed(z0 - radius, z0 + radius).mapToObj(z -> CloPos.chunk(x, z)));
+        }
+        int x0 = center.getX();
+        int y0 = center.getY();
+        int z0 = center.getZ();
+        return IntStream.rangeClosed(x0 - radius, x0 + radius).boxed().flatMap(x -> IntStream.rangeClosed(y0 - radius, y0 + radius).boxed()
+                .flatMap(y -> IntStream.rangeClosed(z0 - radius, z0 + radius).mapToObj(z -> CloPos.cube(x, y, z))));
     }
 
     public long asLong() {

@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 public class TestClientCubeCache extends BaseTest {
-    @Disabled // TODO disabled until we can apply client-side mixins in tests properly
+    @Disabled // E7: клиентский кэш и миксины в тестах ещё не применяются
     @Test
     public void basicTests() {
         ClientLevel clientLevelMock = mock(Mockito.RETURNS_DEEP_STUBS);
@@ -108,7 +108,7 @@ public class TestClientCubeCache extends BaseTest {
 
     // TODO should this one be under integration tests instead?
     // TODO disabled until we can do tests with registries (currently errors due to registries being mocked)
-    @Disabled
+    @Disabled // E7: приём пакета куба на клиенте
     @Test
     public void receiveCubePacketTest() {
         ClientLevel clientLevelMock = mock(Mockito.RETURNS_DEEP_STUBS);
@@ -152,7 +152,7 @@ public class TestClientCubeCache extends BaseTest {
      * Test that if a cube position is within the range of storage, then all adjacent chunk positions are also in range
      */
     @Test
-    @Disabled // TODO disabled until we can apply client-side mixins in tests properly
+    @Disabled // E7: клиентский кэш и миксины в тестах ещё не применяются
     public void testCubeRangeContainedWithinChunkRange() {
         ClientLevel clientLevelMock = mock(Mockito.RETURNS_DEEP_STUBS);
         when(((CanBeCubic) clientLevelMock).cc_isCubic()).thenReturn(true);

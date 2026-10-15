@@ -14,8 +14,8 @@ import it.unimi.dsi.fastutil.objects.Object2IntArrayMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import it.unimi.dsi.fastutil.objects.Object2IntMaps;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.server.level.progress.StoringChunkProgressListener;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.server.level.progress.ChunkLoadStatusView;
 import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
@@ -85,12 +85,12 @@ public class CubicLevelLoadingScreen {
     }
 
     // Called from MixinLevelLoadingScreen when the chunk diagram would be rendered
-    public static void doRender(GuiGraphics guiGraphics, StoringChunkProgressListener progressListener) {
+    public static void doRender(GuiGraphicsExtractor guiGraphics, ChunkLoadStatusView progressListener) {
         int statusCount = ChunkStatus.getStatusList().size();
         int[] chunkStatusCounts = new int[statusCount];
         int[] cubeStatusCounts = new int[statusCount];
 
-        int sectionRenderRadius = progressListener.getDiameter();
+        int sectionRenderRadius = progressListener.radius() * 2 + 1;
         countChunks(progressListener, chunkStatusCounts, sectionRenderRadius);
         countCubes(progressListener, cubeStatusCounts, Coords.sectionToCubeCeil(sectionRenderRadius));
 
@@ -99,10 +99,10 @@ public class CubicLevelLoadingScreen {
                 guiGraphics.guiHeight(), CubicConstants.DIAMETER_IN_SECTIONS, null));
     }
 
-    private static void countChunks(StoringChunkProgressListener progressListener, int[] chunkStatusCounts, int sectionRenderRadius) {
+    private static void countChunks(ChunkLoadStatusView progressListener, int[] chunkStatusCounts, int sectionRenderRadius) {
         for (int cdx = 0; cdx < sectionRenderRadius; cdx++) {
             for (int cdz = 0; cdz < sectionRenderRadius; cdz++) {
-                ChunkStatus status = progressListener.getStatus(cdx, cdz);
+                ChunkStatus status = progressListener.get(cdx, cdz);
                 if (status == null) {
                     continue;
                 }
@@ -111,8 +111,11 @@ public class CubicLevelLoadingScreen {
         }
     }
 
-    private static void countCubes(StoringChunkProgressListener progressListener, int[] cubeStatusCounts, int cubeRenderRadius) {
-        var tracker = (StoringCloProgressListener) progressListener;
+    private static void countCubes(ChunkLoadStatusView progressListener, int[] cubeStatusCounts, int cubeRenderRadius) {
+        // E4: карта статусов куба больше не лежит на ванильном слушателе.
+        if (!(progressListener instanceof StoringCloProgressListener tracker)) {
+            return;
+        }
         for (int dx = -1; dx <= cubeRenderRadius + 1; dx++) {
             for (int dz = -1; dz <= cubeRenderRadius + 1; dz++) {
                 for (int dy = -1; dy <= cubeRenderRadius + 1; dy++) {
@@ -126,7 +129,7 @@ public class CubicLevelLoadingScreen {
         }
     }
 
-    private static void renderColorKey(GuiGraphics guiGraphics, int[] chunkStatusCounts, int[] cubeStatusCounts) {
+    private static void renderColorKey(GuiGraphicsExtractor guiGraphics, int[] chunkStatusCounts, int[] cubeStatusCounts) {
         var font = Minecraft.getInstance().font;
 
         int x = 1;
@@ -143,11 +146,11 @@ public class CubicLevelLoadingScreen {
             // - or just make it configurable. Maybe have an option to disable the color key entirely
             var statusLabel = status.getName().substring("minecraft:".length()) + " (" + chunkStatusCounts[status.getIndex()] + ", "
                     + cubeStatusCounts[status.getIndex()] + ")";
-            guiGraphics.drawString(font, statusLabel, x + radius + margin, y + 2, ARGB.white(1));
+            guiGraphics.text(font, statusLabel, x + radius + margin, y + 2, ARGB.white(1));
             int color = ARGB.opaque(STATUS_COLORS.getOrDefault(status, DEFAULT_STATUS_COLOR));
             int colorWithAlpha = ARGB.color(STATUS_ALPHAS.getValue(status.getIndex()), color);
             guiGraphics.fill(x, y, x + radius, y + radius, colorWithAlpha);
-            guiGraphics.renderOutline(x, y, radius, radius, color);
+            guiGraphics.outline(x, y, radius, radius, color);
 
             y += radius + margin;
         }

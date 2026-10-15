@@ -14,10 +14,12 @@ import io.github.opencubicchunks.cc_core.world.SpawnPlaceFinder;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ChunkLoadCounter;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.progress.LevelLoadListener;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.storage.ServerLevelData;
 import org.spongepowered.asm.mixin.Mixin;
@@ -35,10 +37,10 @@ public abstract class MixinMinecraftServer {
 
     // setInitialSpawn
     // We replace the ChunkPos spawn position with a CubePos spawn position and reuse it later to get the world position.
-    @Inject(method = "setInitialSpawn", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/ChunkPos;<init>(Lnet/minecraft/core/BlockPos;)V"))
+    @Inject(method = "setInitialSpawn", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/ChunkPos;containing(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/ChunkPos;"))
     private static void cc_replaceChunkPosInSetInitialSpawn(
-            ServerLevel serverLevel, ServerLevelData serverLevelData, boolean generateBonusChest, boolean debug, CallbackInfo ci,
-            @Share("cubePos") LocalRef<CubePos> cubePosLocalRef
+            ServerLevel serverLevel, ServerLevelData serverLevelData, boolean generateBonusChest, boolean debug, LevelLoadListener levelLoadListener,
+            CallbackInfo ci, @Share("cubePos") LocalRef<CubePos> cubePosLocalRef
     ) {
         if (((CanBeCubic) serverLevel).cc_isCubic()) {
             CubePos cubePos = new CubePos(serverLevel.getChunkSource().randomState().sampler().findSpawnPosition());
@@ -77,12 +79,12 @@ public abstract class MixinMinecraftServer {
         return original.call(serverLevel, heightmapType, x, z);
     }
 
-    @WrapOperation(method = "prepareLevels", at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Mth;square(I)I"))
-    private int cc_onPrepareLevels_computeTickingGeneratedCount(int value, Operation<Integer> original) {
+    @WrapOperation(method = "prepareLevels", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ChunkLoadCounter;totalChunks()I"))
+    private int cc_onPrepareLevels_computeTickingGeneratedCount(ChunkLoadCounter counter, Operation<Integer> original) {
         if (!((CanBeCubic) overworld()).cc_isCubic()) {
-            return original.call(value);
+            return original.call(counter);
         }
-        int cubeRadius = Coords.sectionToCubeCeil(this.getGameRules().getInt(GameRules.RULE_SPAWN_CHUNK_RADIUS));
+        int cubeRadius = Coords.sectionToCubeCeil(this.getGameRules().get(GameRules.RESPAWN_RADIUS));
         int cubeDiameter = cubeRadius * 2 + 1;
         int chunkDiameter = cubeDiameter * CubicConstants.DIAMETER_IN_SECTIONS;
         return cubeDiameter * cubeDiameter * cubeDiameter + chunkDiameter * chunkDiameter;

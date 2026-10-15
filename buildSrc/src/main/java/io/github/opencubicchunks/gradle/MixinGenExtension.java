@@ -252,8 +252,7 @@ public class MixinGenExtension {
         });
     }
 
-    private void writeMixins(SourceSet sourceSet, String name, MixinConfig config, JsonWriter writer)
-            throws IOException {
+    private void writeMixins(SourceSet sourceSet, String name, MixinConfig config, JsonWriter writer) throws IOException {
         Set<Path> classes = getMixinClasses(config, sourceSet.getAllJava());
 
         Set<Path> commonSet = new HashSet<>();

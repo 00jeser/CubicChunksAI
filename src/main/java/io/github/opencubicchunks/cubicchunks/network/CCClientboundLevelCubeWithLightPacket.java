@@ -18,7 +18,7 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkPacketData;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -27,7 +27,7 @@ import net.neoforged.neoforge.network.handling.IPayloadHandler;
 // TODO (P2) the name is currently a lie; no light data :)
 public record CCClientboundLevelCubeWithLightPacket(CubePos pos, CCClientboundLevelCubePacketData cubeData) implements CustomPacketPayload {
     public static final Type<CCClientboundLevelCubeWithLightPacket> TYPE = new Type<>(
-            ResourceLocation.fromNamespaceAndPath(CubicChunks.MODID, "level_cube_with_light"));
+            Identifier.fromNamespaceAndPath(CubicChunks.MODID, "level_cube_with_light"));
 
     public static final StreamCodec<FriendlyByteBuf, CCClientboundLevelCubeWithLightPacket> STREAM_CODEC = StreamCodec.composite(
             CUBE_POS_STREAM_CODEC, CCClientboundLevelCubeWithLightPacket::pos, CCClientboundLevelCubePacketData.STREAM_CODEC,

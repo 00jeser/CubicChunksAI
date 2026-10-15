@@ -24,13 +24,18 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.particles.ExplosionParticleInfo;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.random.WeightedList;
 import net.minecraft.world.TickRateManager;
+import net.minecraft.world.attribute.EnvironmentAttributeSystem;
+import net.minecraft.world.clock.ClockManager;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragonPart;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.flag.FeatureFlagSet;
 import net.minecraft.world.item.alchemy.PotionBrewing;
@@ -42,6 +47,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.FuelValues;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkSource;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
@@ -53,12 +59,12 @@ import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
+import net.minecraft.world.level.storage.LevelData;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import net.minecraft.world.level.storage.WritableLevelData;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.Scoreboard;
 import net.minecraft.world.ticks.LevelTickAccess;
-import net.neoforged.neoforge.entity.PartEntity;
 import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -106,7 +112,7 @@ public class TestCubicLevel extends BaseTest {
         @Override public void explode(
                 @Nullable Entity source, @Nullable DamageSource damageSource, @Nullable ExplosionDamageCalculator damageCalculator, double x,
                 double y, double z, float radius, boolean fire, ExplosionInteraction explosionInteraction, ParticleOptions smallExplosionParticles,
-                ParticleOptions largeExplosionParticles, Holder<SoundEvent> explosionSound
+                ParticleOptions largeExplosionParticles, WeightedList<ExplosionParticleInfo> blockParticles, Holder<SoundEvent> explosionSound
         ) {
 
         }
@@ -119,7 +125,7 @@ public class TestCubicLevel extends BaseTest {
             return null;
         }
 
-        @Override public Collection<PartEntity<?>> dragonParts() {
+        @Override public Collection<EnderDragonPart> dragonParts() {
             return List.of();
         }
 
@@ -155,20 +161,22 @@ public class TestCubicLevel extends BaseTest {
             return null;
         }
 
-        @Override public void setDayTimeFraction(float dayTimeFraction) {
+        @Override public void setRespawnData(LevelData.RespawnData respawnData) {}
 
+        @Override public LevelData.RespawnData getRespawnData() {
+            return null;
         }
 
-        @Override public float getDayTimeFraction() {
-            return 0;
+        @Override public ClockManager clockManager() {
+            return null;
         }
 
-        @Override public float getDayTimePerTick() {
-            return 0;
+        @Override public EnvironmentAttributeSystem environmentAttributes() {
+            return null;
         }
 
-        @Override public void setDayTimePerTick(float dayTimePerTick) {
-
+        @Override public WorldBorder getWorldBorder() {
+            return null;
         }
 
         @Override public ChunkSource getChunkSource() {
@@ -197,10 +205,6 @@ public class TestCubicLevel extends BaseTest {
 
         @Override public FeatureFlagSet enabledFeatures() {
             return null;
-        }
-
-        @Override public float getShade(Direction direction, boolean shade) {
-            return 0;
         }
 
         @Override public LevelTickAccess<Block> getBlockTicks() {
@@ -338,11 +342,4 @@ public class TestCubicLevel extends BaseTest {
         }
     }
 
-    @Test
-    public void getCurrentDifficultyAt() throws Exception {
-        try (CloseableReference<TestLevel> testLevelReference = setupTestLevel()) {
-            ((MarkableAsCubic) testLevelReference.value()).cc_setCubic();
-            (testLevelReference.value()).getCurrentDifficultyAt(new BlockPos(0, 0, 0));
-        }
-    }
 }

@@ -44,7 +44,6 @@ import io.github.opencubicchunks.cubicchunks.server.level.CloTrackingView;
 import io.github.opencubicchunks.cubicchunks.server.level.CubeHolder;
 import io.github.opencubicchunks.cubicchunks.server.level.CubicChunkMap;
 import io.github.opencubicchunks.cubicchunks.server.level.GeneratingCubeMap;
-import io.github.opencubicchunks.cubicchunks.server.level.progress.CloProgressListener;
 import io.github.opencubicchunks.cubicchunks.util.StaticCache3D;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.CloAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.LevelClo;
@@ -52,7 +51,6 @@ import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.status.CubeStep;
 import io.github.opencubicchunks.cubicchunks.world.level.entity.CloStatusUpdateListener;
 import net.minecraft.ReportedException;
-import net.minecraft.Util;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.server.level.ChunkGenerationTask;
@@ -63,8 +61,8 @@ import net.minecraft.server.level.FullChunkStatus;
 import net.minecraft.server.level.GenerationChunkHolder;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.level.progress.ChunkProgressListener;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
+import net.minecraft.util.Util;
 import net.minecraft.util.thread.BlockableEventLoop;
 import net.minecraft.world.entity.ai.village.poi.PoiManager;
 import net.minecraft.world.level.ChunkPos;
@@ -110,9 +108,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
         throw new IllegalStateException();
     }
 
-    // TODO this one being on GlobalSet is a bit jank
-    @AddFieldToSets(containers = GlobalSet.ChunkMap_redirects.class, field = "progressListener:Lnet/minecraft/server/level/progress/ChunkProgressListener;")
-    private CloProgressListener cc_progressListener;
+    // E4: поля progressListener у ChunkMap в 26.1.2 нет. Слушатель загрузки — LevelLoadListener на сервере (E6).
     @AddFieldToSets(containers = ChunkToCloSet.ChunkMap_redirects.class, field = "chunkStatusListener:Lnet/minecraft/world/level/entity/ChunkStatusUpdateListener;")
     private CloStatusUpdateListener cc_cloStatusListener;
 
@@ -121,11 +117,10 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
     private void cc_onInit(
             ServerLevel level, LevelStorageSource.LevelStorageAccess levelStorageAccess, DataFixer fixerUpper,
             StructureTemplateManager structureManager, Executor dispatcher, BlockableEventLoop mainThreadExecutor, LightChunkGetter lightChunk,
-            ChunkGenerator generator, ChunkProgressListener progressListener, ChunkStatusUpdateListener chunkStatusListener,
-            Supplier overworldDataStorage, TicketStorage ticketStorage, int serverViewDistance, boolean sync, CallbackInfo ci
+            ChunkGenerator generator, ChunkStatusUpdateListener chunkStatusListener, Supplier overworldDataStorage, TicketStorage ticketStorage,
+            int serverViewDistance, boolean sync, CallbackInfo ci
     ) {
         if (((CanBeCubic) level).cc_isCubic()) {
-            cc_progressListener = ((CloProgressListener) progressListener);
             // TODO P2 (entities): actually pass in a cloStatusListener - since ChunkStatusUpdateListener is passed as a parameter, not sure what the
             // best approach is without making our own constructor
             cc_cloStatusListener = (cloPos, fullChunkStatus) -> {};
@@ -195,7 +190,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
      * Cubes require different adjacency logic compared to Chunks
      */
     @SuppressWarnings("checkstyle:CyclomaticComplexity") // <-- TODO this method is just a bit of a disaster
-    @Dynamic @Inject(method = "cc_getChunkRangeFuture", at = @At("HEAD"), cancellable = true)
+    @Dynamic @Inject(method = "cc_getChunkRangeFuture", at = @At("HEAD"), cancellable = true, require = 0)
     private void cc_onGetChunkRangeFuture(
             ChunkHolder cloHolder, int radius, IntFunction<ChunkStatus> statusByRadius,
             CallbackInfoReturnable<CompletableFuture<ChunkResult<List<CloAccess>>>> cir
@@ -328,7 +323,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
     }
 
     @Dynamic @Redirect(method = "cc_scheduleChunkLoad", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/ai/village/poi/PoiManager;prefetch(Lio/github/opencubicchunks/cc_core/world/level/CloPos;)"
-            + "Ljava/util/concurrent/CompletableFuture;"))
+            + "Ljava/util/concurrent/CompletableFuture;"), require = 0)
     private CompletableFuture<?> cc_onScheduleChunkLoad_poiManagerPreFetch(PoiManager instance, CloPos cloPos) {
         // TODO (P2) save/load - PoiManager
         return CompletableFuture.completedFuture(null);
@@ -359,7 +354,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
             GenerationChunkHolder generationchunkholder, CubeStep chunkstep, StaticCache3D<GenerationChunkHolder> cache
     );
 
-    @Dynamic @Redirect(method = "cc_applyCubeStep", at = @At(value = "INVOKE", target = "Lio/github/opencubicchunks/cubicchunks/util/StaticCache3D;get(II)Ljava/lang/Object;"))
+    @Dynamic @Redirect(method = "cc_applyCubeStep", at = @At(value = "INVOKE", target = "Lio/github/opencubicchunks/cubicchunks/util/StaticCache3D;get(II)Ljava/lang/Object;"), require = 0)
     private Object cc_onApplyCubeStep_staticCacheGet(StaticCache3D instance, int x, int z, @Local(ordinal = 0) CubePos cubePos) {
         return instance.get(cubePos.getX(), cubePos.getY(), cubePos.getZ());
     }
@@ -447,7 +442,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
 //     * Redirect error logging to log with CloPos
 //     */
 //    @Dynamic @Inject(method = "cc_save", at = @At(value = "INVOKE", target = "Lio/github/opencubicchunks/cc_core/world/level/CloPos;getX
-//    ()I"), cancellable = true)
+//    ()I"), cancellable = true, require = 0)
 //    private void cc_onSave_errorLog(CloAccess cloAccess, CallbackInfoReturnable<Boolean> cir, @Local Exception exception) {
 //        LOGGER.error("Failed to save chunk or cube {}", cloAccess.cc_getCloPos().toString(), exception);
 //        cir.setReturnValue(false);
@@ -522,7 +517,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
     @TransformFromMethod("updateChunkTracking(Lnet/minecraft/server/level/ServerPlayer;)V")
     private native void cc_updateChunkTracking(ServerPlayer player);
 
-    @Dynamic @WrapOperation(method = "cc_updateChunkTracking", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ChunkMap;getPlayerViewDistance(Lnet/minecraft/server/level/ServerPlayer;)I"))
+    @Dynamic @WrapOperation(method = "cc_updateChunkTracking", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ChunkMap;getPlayerViewDistance(Lnet/minecraft/server/level/ServerPlayer;)I"), require = 0)
     private int cc_onUpdateChunkTracking_getViewDistance(ChunkMap instance, ServerPlayer player, Operation<Integer> original) {
         return Coords.sectionToCubeRenderDistance(original.call(instance, player));
     }
@@ -533,7 +528,7 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
     @TransformFromMethod("applyChunkTrackingView(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/server/level/ChunkTrackingView;)V")
     private native void cc_applyChunkTrackingView(ServerPlayer player, CloTrackingView chunkTrackingView);
 
-    @Dynamic @Redirect(method = "cc_applyChunkTrackingView", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;send(Lnet/minecraft/network/protocol/Packet;)V"))
+    @Dynamic @Redirect(method = "cc_applyChunkTrackingView", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerGamePacketListenerImpl;send(Lnet/minecraft/network/protocol/Packet;)V"), require = 0)
     private void cc_onApplyChunkTrackingView_setChunkCacheCenterPacket(
             ServerGamePacketListenerImpl instance, Packet packet, ServerPlayer player, CloTrackingView cloTrackingView
     ) {
@@ -547,12 +542,12 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
     @TransformFromMethod("getPlayers(Lnet/minecraft/world/level/ChunkPos;Z)Ljava/util/List;")
     public native List<ServerPlayer> cc_getPlayers(CloPos pos, boolean boundaryOnly);
 
-    @Dynamic @Redirect(method = "cc_getPlayers", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ChunkMap;isChunkOnTrackedBorder(Lnet/minecraft/server/level/ServerPlayer;II)Z"))
+    @Dynamic @Redirect(method = "cc_getPlayers", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ChunkMap;isChunkOnTrackedBorder(Lnet/minecraft/server/level/ServerPlayer;II)Z"), require = 0)
     private boolean cc_getPlayers_isChunkOnTrackedBorder(ChunkMap instance, ServerPlayer player, int x, int z, @Local CloPos pos) {
         return this.cc_isChunkOnTrackedBorder(player, pos.getX(), pos.getY(), pos.getZ());
     }
 
-    @Dynamic @Redirect(method = "cc_getPlayers", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ChunkMap;isChunkTracked(Lnet/minecraft/server/level/ServerPlayer;II)Z"))
+    @Dynamic @Redirect(method = "cc_getPlayers", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/level/ChunkMap;isChunkTracked(Lnet/minecraft/server/level/ServerPlayer;II)Z"), require = 0)
     private boolean cc_getPlayers_isChunkTracked(ChunkMap instance, ServerPlayer player, int x, int z, @Local CloPos pos) {
         return this.cc_isChunkTracked(player, pos.getX(), pos.getY(), pos.getZ());
     }
