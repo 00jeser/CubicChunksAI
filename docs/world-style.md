@@ -55,5 +55,5 @@ NBT-соединение `data.style` — строка `CUBIC`, `HYBRID` или 
 
 - Настоящая генерация `HYBRID` и влияние `generates2DChunks` на задачи чанка — E12.
 - Кнопка на экране 26.1 и момент записи общего toml — E19. Сеттер `cc_setCubicChunks` на месте.
-- Загрузка кубов — E6. Пустой `cc_tickCube` не заполняется.
+- Загрузка кубов и случайный тик — [server-load.md](server-load.md). Block entity и запланированные тики — E16.
 - Миграция старых миров отдельным проходом. Нет ключа и `generateNewWorldsAsCC=false` — стиль `CHUNK`.

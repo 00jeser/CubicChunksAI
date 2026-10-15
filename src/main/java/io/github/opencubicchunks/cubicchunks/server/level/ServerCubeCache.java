@@ -24,6 +24,8 @@ public interface ServerCubeCache extends CubeSource {
 
     void cc_addTicketWithRadius(TicketType ticket, CloPos cloPos, int radius);
 
+    CompletableFuture<?> cc_addTicketAndLoadWithRadius(TicketType ticket, CloPos cloPos, int radius);
+
     void cc_removeTicketWithRadius(TicketType ticket, CloPos cloPos, int radius);
 
     boolean cc_updateCloForced(CloPos pPos, boolean pAdd);

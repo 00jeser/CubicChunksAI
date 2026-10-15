@@ -81,7 +81,7 @@ CubeAccess
 1. Игрок получает тикет. `MixinDistanceManager` / `MixinPlayerTicketTracker` ведут `CloPos`, не только `ChunkPos`, если `cc_isCubic`.
 2. `MixinChunkMap` поднимает `ChunkHolder`. Для куба держатель — `CubeHolder`.
 3. `MixinChunkGenerationTask` идёт по `CubePyramid`. Шаг зовёт метод `CubeStatusTasks`.
-4. Несделанный шаг возвращает `passThrough` и не пишет биомы, свет и карты высот. `generateNoise` сегодня пишет синусоиду (`SUPERFLAT_HEIGHT`). `full` поднимает `ProtoCube` в `LevelCube`.
+4. Несделанный шаг возвращает `passThrough` и не пишет биомы, свет и карты высот. `generateNoise` пишет синусоиду (`SUPERFLAT_HEIGHT`, амплитуда 20) — это фактический генератор до E12. `full` поднимает `ProtoCube` в `LevelCube`; счётчик и лог ведёт `FullCubeTracker`. Вертикальный радиус тикетов игрока берётся из `CommonConfig.getVerticalViewDistance`.
 5. `MixinPlayerChunkSender` шлёт `CCClientboundLevelCubeWithLightPacket`. Имя пакета шире содержимого, пока нет света (E10) и карт высот (E9).
 6. `CCNetworkHandler` принимает пакет на клиентском потоке игры. `ClientCubeCache.cc_replaceWithPacketData` кладёт `LevelCube` в `Storage`.
 7. `MixinViewArea` перестраивает секции вокруг центра. Меш читает уже принятые секции и не ходит в регион и в конфиг.
@@ -91,8 +91,8 @@ CubeAccess
 ## 4. Поток тика
 
 1. Ванильный тик уровня доходит до `MixinServerLevel.cc_tickClo`.
-2. Если `LevelClo` — `LevelCube`, вызывается `cc_tickCube`. Сегодня тело пустое.
-3. Случайные тики, block entity и расписание жидкостей включаются в E16. До этого куб не делает вид, что тикает.
+2. Если `LevelClo` — `LevelCube`, вызывается `cc_tickCube`. Метод делает случайные тики блока и жидкости по секциям куба. Осадки не вызываются: они читают карты высот (E9).
+3. Block entity, запланированные тики и POI включаются в E16. `registerTickContainerInLevel` до этого пустой. Локальная сложность кубического уровня читает `inhabitedTime` куба (`MixinServerLevel.cc_cubeDifficulty`).
 4. Сущности тикаются ванильным циклом, но позиция и переход между кубами идут через `EntityCubePosGetter` / `MixinEntity` (E15). Телепорт, который считает мир колонкой фиксированной высоты, в кубическом уровне не вызывается.
 
 ## 5. Поток сохранения

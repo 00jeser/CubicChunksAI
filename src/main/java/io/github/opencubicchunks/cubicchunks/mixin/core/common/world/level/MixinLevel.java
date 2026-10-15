@@ -252,6 +252,6 @@ public abstract class MixinLevel implements CubicLevel, MarkableAsCubic, LevelAc
         }
     }
 
-    // E4: Level.getCurrentDifficultyAt нет в 26.1.2 (не переименован). Подмена локальной сложности куба отложена.
+    // Local difficulty for a cubic level is MixinServerLevel.cc_cubeDifficulty. Level itself has no getCurrentDifficultyAt.
     // TODO: Phase 3 low priority: Add a method to modify isOutsideSpawnableHeight to respect the limits of the packing for CloPos
 }

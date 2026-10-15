@@ -359,6 +359,12 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
     private Object cc_onApplyCubeStep_staticCacheGet(StaticCache3D instance, int x, int z, @Local(ordinal = 0) CubePos cubePos) {
         return instance.get(cubePos.getX(), cubePos.getY(), cubePos.getZ());
     }
+
+    // The crash-report path still calls the 2D pack helper. Keep Y so the report (and any later failure) names the cube.
+    @Dynamic @Redirect(method = "cc_applyCubeStep", at = @At(value = "INVOKE", target = "Lio/github/opencubicchunks/cc_core/api/CubePos;dummy_chunkAsLong(II)J"), require = 0)
+    private long cc_onApplyCubeStep_chunkAsLong(int x, int z, @Local(ordinal = 0) CubePos cubePos) {
+        return cubePos.asLong();
+    }
     // endregion
 
     @AddTransformToSets(ChunkToCloSet.ChunkMap_redirects.class)
@@ -416,6 +422,12 @@ public abstract class MixinChunkMap extends MixinChunkStorage implements Generat
     @AddTransformToSets(ChunkToCloSet.ChunkMap_redirects.class)
     @TransformFromMethod("prepareAccessibleChunk(Lnet/minecraft/server/level/ChunkHolder;)Ljava/util/concurrent/CompletableFuture;")
     public native CompletableFuture<ChunkResult<LevelClo>> cc_prepareAccessibleChunk(ChunkHolder holder);
+
+    @Override public CompletableFuture<ChunkResult<List<CloAccess>>> cc_cubeRangeFuture(
+            ChunkHolder holder, int radius, IntFunction<ChunkStatus> statusByRadius
+    ) {
+        return this.cc_getChunkRangeFuture(holder, radius, statusByRadius);
+    }
 
     @Inject(method = "prepareAccessibleChunk", at = @At("HEAD"), cancellable = true)
     private void cc_onVanillaPrepareAccessibleChunk(ChunkHolder chunk, CallbackInfoReturnable<CompletableFuture<ChunkResult<LevelClo>>> cir) {
