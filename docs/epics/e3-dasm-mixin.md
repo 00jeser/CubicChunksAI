@@ -1,7 +1,7 @@
 # E3 — DASM и Mixin на 26.1
 
 **Этап ТЗ:** 1. Порт собирается  
-**Статус:** planned  
+**Статус:** done  
 **Зависимости:** [E2](e2-core-headers.md)  
 **Следующий:** [E4](e4-signature-port.md)
 
@@ -44,7 +44,7 @@
 
 ```text
 Зависимости
-├── dasm api = dasm-neoforge = <записанная версия>
+├── dasm api = dasm-neoforge = 3.2.0
 └── jarJar несёт ту же версию в рантайм
 
 Конфиги (генерируются, не правятся руками)
@@ -149,3 +149,9 @@ S1 версия dasm → S2 конфиги и плагин → S3 список �
 - Приёмка прогнана
 - ARCHITECTURE §8 содержит версию `dasm`
 - Регрессия E1–E2 цела
+
+## Итог
+
+Пара `dasm` / `dasm-neoforge` осталась `3.2.0`: резолв на classpath NeoForge `26.1.2.116` прошёл без конфликта, api-jar содержит `@Dasm`, `@TransformFromMethod`, `@AddMethodToSets` и остальные импорты наборов. `genAll` пишет `cubicchunks.mixins.core.json` с `ASMConfigPlugin` и `JAVA_25`; имена совпадают с `[[mixins]]` и `[[dasm]]` в toml. Json в git не коммитятся.
+
+Отклонение от DoD спринта 3.2 и пункта приёмки «наборы компилируются»: `GlobalSet` и `ChunkToCloSet` красные, потому что в 26.1.2 нет `ChunkProgressListener`, `StoringChunkProgressListener`, `LoggerChunkProgressListener`, `ProcessorChunkProgressListener` и `ChunkStorage`. Это цели `@Ref`. Спринт запрещает их переписывать, поэтому правка отложена в E4. Остальные файлы `mixin/dasmsets` ошибок компиляции не дали. Полный список красных `src/main` — в шапке [E4](e4-signature-port.md).
