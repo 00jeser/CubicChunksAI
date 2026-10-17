@@ -17,6 +17,7 @@ import io.github.opencubicchunks.cc_core.world.CubicLevelHeightAccessor.WorldSty
 import io.github.opencubicchunks.cubicchunks.MarkableAsCubic;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
+import io.github.opencubicchunks.cubicchunks.world.level.CubicBuildHeight;
 import io.github.opencubicchunks.cubicchunks.world.level.CubicLevel;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeSource;
@@ -253,5 +254,19 @@ public abstract class MixinLevel implements CubicLevel, MarkableAsCubic, LevelAc
     }
 
     // Local difficulty for a cubic level is MixinServerLevel.cc_cubeDifficulty. Level itself has no getCurrentDifficultyAt.
-    // TODO: Phase 3 low priority: Add a method to modify isOutsideSpawnableHeight to respect the limits of the packing for CloPos
+    // isOutsideSpawnableHeight on 26.1 is already ±20_000_000. Spawn search is E17.
+    // setblock's "out of this world" is isInWorldBounds → isInsideBuildHeight, which still uses vanilla min/max.
+
+    /**
+     * {@code /setblock} calls {@code isInWorldBounds} before {@code setBlock}. Vanilla build height rejects Y=-10001 even
+     * when the cube exists. Packing of {@link io.github.opencubicchunks.cc_core.api.CubePos} is the vertical limit.
+     */
+    @WrapOperation(method = { "isInWorldBounds",
+        "isInValidBounds" }, at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/LevelHeightAccessor;isInsideBuildHeight(Lnet/minecraft/core/BlockPos;)Z"))
+    private boolean cc_cubicInsideBuildHeight(Level level, BlockPos pos, Operation<Boolean> original) {
+        if (!cc_isCubic) {
+            return original.call(level, pos);
+        }
+        return CubicBuildHeight.contains(pos);
+    }
 }

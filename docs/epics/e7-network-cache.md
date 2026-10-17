@@ -168,7 +168,7 @@ S1 секции в буфер → S2 центр и забывание → S3 т�
 
 Сервер на кубическом уровне шлёт `CCClientboundLevelCubeWithLightPacket`: в буфере `CubePos` и байты секций, хвоста со светом нет. Клиент собирает `LevelCube` с теми же блоками синусоиды. Пустая карта высот и пустой потребитель block entity остаются явными (E9, E16). `queueLightUpdate` ничего не рисует: меш — E8.
 
-`CCClientboundSetCubeCacheCenterPacket` уже уходил из `MixinChunkMap`. `cc_updateViewCenter` двигает окно и снимает кубы вне радиуса. `cc_drop` куб из `Storage` убирает и исключения не бросает. Серверный куб при этом не очищается.
+`CCClientboundSetCubeCacheCenterPacket` задумывался из `MixinChunkMap.cc_applyChunkTrackingView`. Этот метод пропускается как `@Final`, поэтому центр шлёт `MixinPlayerChunkSender`, когда куб игрока сменился. Иначе окно остаётся на кубе 0 и куб на Y≈−313 не принимается. `cc_updateViewCenter` двигает окно и снимает кубы вне радиуса. В batch отправителя попадают только уже готовые ключи: колонка без `getChunkToSend` очередь не занимает. `cc_drop` куб из `Storage` убирает и исключения не бросает. Серверный куб при этом не очищается.
 
 Стиль `ClientLevel` приходит пакетом `CCClientboundLevelInfoPacket` перед логином и респавном и применяется после `Level.<init>`, до `ClientChunkCache`. `CHUNK` кубовый кэш не создаёт и пакет куба не получает.
 

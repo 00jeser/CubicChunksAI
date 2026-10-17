@@ -25,6 +25,7 @@ import io.github.opencubicchunks.cubicchunks.mixin.test.common.server.network.Pl
 import io.github.opencubicchunks.cubicchunks.network.CCClientboundLevelChunkPacket;
 import io.github.opencubicchunks.cubicchunks.network.CCClientboundLevelCubeWithLightPacket;
 import io.github.opencubicchunks.cubicchunks.network.CCClientboundLevelInfoPacket;
+import io.github.opencubicchunks.cubicchunks.network.CCClientboundSetCubeCacheCenterPacket;
 import io.github.opencubicchunks.cubicchunks.network.ClientWorldStyle;
 import io.github.opencubicchunks.cubicchunks.testutils.BaseTest;
 import io.github.opencubicchunks.cubicchunks.testutils.Misc;
@@ -149,6 +150,7 @@ public class TestClientCubeNetwork extends BaseTest {
             }
         }
         assertEquals(1, sent.stream().filter(payload -> payload instanceof CCClientboundLevelCubeWithLightPacket).count());
+        assertTrue(sent.stream().anyMatch(payload -> payload instanceof CCClientboundSetCubeCacheCenterPacket));
         assertTrue(sent.stream().anyMatch(payload -> payload instanceof CCClientboundLevelChunkPacket));
         assertFalse(sent.stream()
                 .anyMatch(payload -> payload instanceof CCClientboundLevelCubeWithLightPacket packet && !packet.pos().equals(cube.cc_getCubePos())));

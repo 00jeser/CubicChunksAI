@@ -9,13 +9,16 @@ import java.util.function.ToIntFunction;
 import io.github.notstirred.dasm.api.annotations.Dasm;
 import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddMethodToSets;
 import io.github.notstirred.dasm.api.annotations.selector.Ref;
+import io.github.opencubicchunks.cc_core.api.CubePos;
 import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
+import io.github.opencubicchunks.cubicchunks.CubicChunks;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
 import io.github.opencubicchunks.cubicchunks.network.CCClientboundForgetLevelCloPacket;
 import io.github.opencubicchunks.cubicchunks.network.CCClientboundLevelChunkPacket;
 import io.github.opencubicchunks.cubicchunks.network.CCClientboundLevelCubeWithLightPacket;
+import io.github.opencubicchunks.cubicchunks.network.CCClientboundSetCubeCacheCenterPacket;
 import io.github.opencubicchunks.cubicchunks.world.level.CubicLevel;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.LevelClo;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess;
@@ -59,9 +62,18 @@ public class MixinPlayerChunkSender {
     @Unique
     private final LongSet cc_sentCubes = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
 
-    /** Сколько кубов вокруг игрока класть в очередь, если трекер DASM их туда не положил. */
+    /** Центр клиентского кэша, который уже ушёл этому игроку. Пакет из {@code cc_applyChunkTrackingView} не существует: метод {@code @Final}. */
     @Unique
-    private static final int CC_ENQUEUE_RADIUS = 2;
+    private boolean cc_hasSentCenter;
+
+    @Unique
+    private int cc_sentCenterX;
+
+    @Unique
+    private int cc_sentCenterY;
+
+    @Unique
+    private int cc_sentCenterZ;
 
     /** {@code @TransformFromMethod} этой сигнатуры пропускается как {@code @Final}. Тело — то же, что у колонки: ключ в очередь. */
     public void cc_markCloPendingToSend(LevelClo clo) {
@@ -90,6 +102,7 @@ public class MixinPlayerChunkSender {
         }
 
         ci.cancel();
+        this.cc_sendCenterIfMoved(player);
 
         if (this.unacknowledgedBatches < this.maxUnacknowledgedBatches) {
             float f = Math.max(1.0F, this.desiredChunksPerTick);
@@ -158,13 +171,33 @@ public class MixinPlayerChunkSender {
         // net.neoforged.neoforge.event.EventHooks.fireChunkSent(packetListener.player, chunk, level);
     }
 
+    /**
+     * {@code cc_applyChunkTrackingView} пропускается как {@code @Final}, поэтому пакет центра из {@code ChunkMap} не
+     * уходит. Окно кэша остаётся на кубе 0, и куб игрока на Y=-10000 клиент выбрасывает как вне радиуса.
+     */
+    @Unique
+    private void cc_sendCenterIfMoved(ServerPlayer player) {
+        int x = Coords.blockToCube(player.blockPosition().getX());
+        int y = Coords.blockToCube(player.blockPosition().getY());
+        int z = Coords.blockToCube(player.blockPosition().getZ());
+        if (this.cc_hasSentCenter && x == this.cc_sentCenterX && y == this.cc_sentCenterY && z == this.cc_sentCenterZ) {
+            return;
+        }
+        this.cc_hasSentCenter = true;
+        this.cc_sentCenterX = x;
+        this.cc_sentCenterY = y;
+        this.cc_sentCenterZ = z;
+        PacketDistributor.sendToPlayer(player, new CCClientboundSetCubeCacheCenterPacket(CubePos.of(x, y, z)));
+    }
+
     private void cc_enqueueCubesAround(ServerPlayer player) {
         int centerX = Coords.blockToCube(player.blockPosition().getX());
         int centerY = Coords.blockToCube(player.blockPosition().getY());
         int centerZ = Coords.blockToCube(player.blockPosition().getZ());
-        for (int dx = -CC_ENQUEUE_RADIUS; dx <= CC_ENQUEUE_RADIUS; dx++) {
-            for (int dy = -CC_ENQUEUE_RADIUS; dy <= CC_ENQUEUE_RADIUS; dy++) {
-                for (int dz = -CC_ENQUEUE_RADIUS; dz <= CC_ENQUEUE_RADIUS; dz++) {
+        int radius = Coords.sectionToCubeRenderDistance(CubicChunks.config().getVerticalViewDistance());
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dy = -radius; dy <= radius; dy++) {
+                for (int dz = -radius; dz <= radius; dz++) {
                     long key = CloPos.cube(centerX + dx, centerY + dy, centerZ + dz).toLong();
                     if (this.cc_sentCubes.contains(key)) {
                         continue;
@@ -184,14 +217,19 @@ public class MixinPlayerChunkSender {
         if (this.memoryConnection) {
             maxBatch = Math.max(maxBatch, this.pendingChunks.size());
         }
+        // Колонки, которые getChunkToSend никогда не отдаёт, раньше занимали весь batch. Куб ниже ванильной высоты
+        // оставался в pending и до клиента не доходил.
+        ServerLevel level = cc_chunkMapLevel(chunkMap);
         List<Long> keys = new ArrayList<>();
         for (Long key : this.pendingChunks) {
+            if (cc_resolve(level, chunkMap, key) == null) {
+                continue;
+            }
             keys.add(key);
             if (keys.size() >= maxBatch) {
                 break;
             }
         }
-        ServerLevel level = cc_chunkMapLevel(chunkMap);
         List<LevelClo> clos = new ArrayList<>();
         for (long key : keys) {
             LevelClo clo = cc_resolve(level, chunkMap, key);
