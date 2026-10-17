@@ -9,6 +9,7 @@ import java.util.function.Consumer;
 import io.github.opencubicchunks.cc_core.api.CubePos;
 import io.github.opencubicchunks.cubicchunks.CubicChunks;
 import io.github.opencubicchunks.cubicchunks.client.multiplayer.ClientCubeCache;
+import io.github.opencubicchunks.cubicchunks.client.renderer.chunk.CubicSectionMesh;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.network.FriendlyByteBuf;
@@ -56,10 +57,9 @@ public record CCClientboundLevelCubeWithLightPacket(CubePos pos, CCClientboundLe
             ((ClientCubeCache) (level.getChunkSource())).cc_replaceWithPacketData(x, y, z, payload.cubeData.getReadBuffer(), heightmaps,
                     entityTagConsumer);
 
-            // Световых массивов в буфере нет до E10. Меш не строится: cc_onCubeReadyToRender — E8.
-            ((ClientLevel) level).queueLightUpdate(() -> {
-                // E10 applies light here. E8 rebuilds the section mesh.
-            });
+            // Световых массивов в буфере нет до E10. Здесь только перестройка меша уже принятых секций.
+            CubePos ready = CubePos.of(x, y, z);
+            ((ClientLevel) level).queueLightUpdate(() -> CubicSectionMesh.onCubeReady((ClientLevel) level, ready));
         }
     }
 }

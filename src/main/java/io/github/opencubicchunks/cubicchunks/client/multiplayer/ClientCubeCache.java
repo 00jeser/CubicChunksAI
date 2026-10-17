@@ -24,6 +24,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkPacketData;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 public interface ClientCubeCache extends CubeSource {
@@ -42,6 +43,16 @@ public interface ClientCubeCache extends CubeSource {
     void cc_updateViewCenter(int x, int y, int z);
 
     void cc_updateViewRadius(int viewDistance);
+
+    /**
+     * Куб секции для меша. {@code forceLoad} ложный: промах не читает регион. Реализация клиента подставляет пустой куб.
+     */
+    default @Nullable LevelCube cc_cubeForMesh(int cubeX, int cubeY, int cubeZ) {
+        if (cc_getCube(cubeX, cubeY, cubeZ, ChunkStatus.FULL, false) instanceof LevelCube levelCube) {
+            return levelCube;
+        }
+        return null;
+    }
 
     /**
      * Дистанция колонок, в которую помещаются все секции куба на краю {@code cubeStorageRadius}. Ванильный {@code calculateStorageRange} прибавит 3

@@ -12,7 +12,7 @@
 
 `CCClientboundLevelCubeWithLightPacket` несёт `CubePos` и секции блоков. Размер буфера — сумма `LevelChunkSection.getSerializedSize()`. Световых массивов в дампе нет. Имя класса остаётся до E10.
 
-Обработчик зовёт `cc_replaceWithPacketData` с пустой картой высот и пустым потребителем block entity. Блоки читаются из буфера, регион и генератор не вызываются. `queueLightUpdate` в E7 пустой.
+Обработчик зовёт `cc_replaceWithPacketData` с пустой картой высот и пустым потребителем block entity. Блоки читаются из буфера, регион и генератор не вызываются. `queueLightUpdate` зовёт `CubicSectionMesh.onCubeReady`: меш секций куба перестраивается из кэша. Световых массивов в пакете нет (E10).
 
 Колонка в кубическом мире — отдельный `CCClientboundLevelChunkPacket` с одним `ChunkPos`. Блоков куба в нём нет.
 
@@ -26,7 +26,6 @@
 
 ## Что остаётся следующим эпикам
 
-- Меш и `cc_onCubeReadyToRender` — E8.
 - `long[]` карт высот в пакете — E9.
-- Световые массивы — E10.
+- Световые массивы и снятие `MAX_LEVEL` в `MixinLevelLightEngine` — E10. Меш уже читает блоки секции.
 - Теги block entity — E16.

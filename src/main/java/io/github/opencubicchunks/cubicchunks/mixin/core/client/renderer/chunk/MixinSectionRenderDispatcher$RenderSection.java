@@ -2,6 +2,7 @@ package io.github.opencubicchunks.cubicchunks.mixin.core.client.renderer.chunk;
 
 import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
+import io.github.opencubicchunks.cubicchunks.client.renderer.chunk.CubicSectionMesh;
 import io.github.opencubicchunks.cubicchunks.mixin.access.client.SectionRenderDispatcherAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.CubicLevel;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
@@ -31,8 +32,7 @@ public abstract class MixinSectionRenderDispatcher$RenderSection {
         if (!((CanBeCubic) ((SectionRenderDispatcherAccess) this$0).cc_getLevel()).cc_isCubic()) {
             return;
         }
-        // TODO (P2) lighting: also check the cubic equivalent of LevelLightEngine.lightOnInColumn here (see vanilla doesChunkExistAt method) -
-        // sections currently sometimes fail to render due to this missing check
+        // Свет секцию не прячет: lightOnInColumn — колонка, E10. Куб в кэше достаточен.
         cir.setReturnValue(((CubicLevel) ((SectionRenderDispatcherAccess) this$0).cc_getLevel()).cc_getCube(
                 Coords.sectionToCube(SectionPos.x(sectionPosLong)), Coords.sectionToCube(SectionPos.y(sectionPosLong)),
                 Coords.sectionToCube(SectionPos.z(sectionPosLong)), ChunkStatus.FULL, false) != null);
@@ -46,19 +46,6 @@ public abstract class MixinSectionRenderDispatcher$RenderSection {
         if (!((CanBeCubic) ((SectionRenderDispatcherAccess) this$0).cc_getLevel()).cc_isCubic()) {
             return;
         }
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    if (dx == 0 && dy == 0 && dz == 0) {
-                        continue;
-                    }
-                    if (!this.doesChunkExistAt(SectionPos.offset(this.sectionNode, dx, dy, dz))) {
-                        cir.setReturnValue(false);
-                        return;
-                    }
-                }
-            }
-        }
-        cir.setReturnValue(true);
+        cir.setReturnValue(CubicSectionMesh.hasAllNeighbors(this::doesChunkExistAt, this.sectionNode));
     }
 }

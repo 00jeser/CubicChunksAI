@@ -87,6 +87,11 @@ public abstract class MixinClientChunkCache extends MixinChunkSource implements 
         }
     }
 
+    @Override public LevelCube cc_cubeForMesh(int cubeX, int cubeY, int cubeZ) {
+        LevelCube cached = ClientCubeCache.super.cc_cubeForMesh(cubeX, cubeY, cubeZ);
+        return cached != null ? cached : this.cc_emptyCube;
+    }
+
     @Override public @Nullable LevelCube cc_getCube(int chunkX, int chunkY, int chunkZ, ChunkStatus requiredStatus, boolean load) {
         if (this.cc_cubeStorage.inRange(chunkX, chunkY, chunkZ)) {
             LevelCube levelCube = this.cc_cubeStorage.getChunk(this.cc_cubeStorage.getIndex(chunkX, chunkY, chunkZ));

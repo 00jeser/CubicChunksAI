@@ -68,7 +68,7 @@ CubeAccess
 ├── ClientCubeCache.Storage                        AtomicReferenceArray<LevelCube>, радиус — большее из view distance и verticalViewDistance
 ├── центр просмотра (x, y, z)                      CCClientboundSetCubeCacheCenterPacket; кубы вне радиуса забываются
 ├── стиль измерения                                CCClientboundLevelInfoPacket до логина и респавна
-└── меш секции                                     ViewArea / RenderSection, E8
+└── меш секции                                     ViewArea / RenderSection; блоки из кэша, свет секции — E10
 ```
 
 `ServerLevel` пишет стиль в конструкторе, после `super()` и до `ServerChunkCache`. Источник — данные измерения `cubicchunks:world_style` (`<dimension>/data/cubicchunks/world_style.dat`). Ключа нет — новый уровень: перекрытие `ServerConfig` по id измерения, иначе при `generateNewWorldsAsCC` стиль `defaultWorldStyle`, иначе `CHUNK`. Файла `serverconfig/cubicchunks.toml` нет — `shouldGenerateNewWorldsAsCC()` даёт `CUBIC` или `CHUNK`. Уже записанный ключ toml не перебивает. `cc_setCubic()` вызывается только для `CUBIC` и `HYBRID`. В лог пишется `dimension=<id> style=<style> cubic=<bool>`. `ClientLevel` берёт тот же стиль из `CCClientboundLevelInfoPacket`: сервер шлёт его сразу перед `ClientboundLoginPacket` и `ClientboundRespawnPacket`, клиент кладёт стиль в очередь и применяет после `Level.<init>`, до `ClientChunkCache`. Без пакета стиль остаётся `CHUNK`, кубовый кэш не создаётся. `generates2DChunks` у `HYBRID` и `CHUNK` на генерацию ещё не влияет — E12.
@@ -85,7 +85,7 @@ CubeAccess
 4. Несделанный шаг возвращает `passThrough` и не пишет биомы, свет и карты высот. `generateNoise` пишет синусоиду (`SUPERFLAT_HEIGHT`, амплитуда 20) — это фактический генератор до E12. `full` поднимает `ProtoCube` в `LevelCube`; счётчик и лог ведёт `FullCubeTracker`. Вертикальный радиус тикетов игрока берётся из `CommonConfig.getVerticalViewDistance`.
 5. `MixinPlayerChunkSender` шлёт `CCClientboundLevelCubeWithLightPacket`, если `CloPos` — куб и уровень кубический. В буфере только `CubePos` и секции блоков. Световых массивов нет до E10, имя класса шире содержимого. Карты высот в пакет не пишутся: обработчик кладёт пустую `Map` (E9). На стиле `CHUNK` метод возвращается сразу, пакет куба не уходит.
 6. `CCNetworkHandler` принимает пакет на клиентском потоке игры. `ClientCubeCache.cc_replaceWithPacketData` кладёт `LevelCube` в `Storage`. Сдвиг центра (`CCClientboundSetCubeCacheCenterPacket`) двигает окно и забывает кубы вне радиуса. `CCClientboundForgetLevelCloPacket` зовёт `cc_drop`: куб уходит из клиентского `Storage` и не трогает серверный кэш.
-7. `MixinViewArea` перестраивает секции вокруг центра. Меш читает уже принятые секции и не ходит в регион и в конфиг.
+7. `MixinViewArea` перестраивает секции вокруг центра. `queueLightUpdate` после пакета куба помечает секции грязными и зовёт `cc_onCubeReadyToRender`. Меш читает уже принятые секции и не ходит в регион и в конфиг.
 
 Колонка в кубическом измерении (`CCClientboundLevelChunkPacket`) несёт то, что ещё нужно 2D-коду (карты высот колонки). Это не второй куб.
 
@@ -112,12 +112,15 @@ CubeAccess
 
 ## 6. Поток рендера
 
-1. Центр — куб игрока, радиус по вертикали — `CommonConfig.verticalViewDistance`.
-2. `MixinSectionOcclusionGraph` обходит секции в трёх осях.
-3. `MixinSectionRenderDispatcher$RenderSection` берёт блоки из секции куба.
-4. Проверка «свет включён в колонке» не решает видимость куба. Пока E10 не готов, куб рисуется с тем светом, который уже лежит в секции; подмена яркости на `MAX_LEVEL` в `MixinLevelLightEngine` снимается в E10, а не остаётся «чтобы было видно».
+1. Центр области — куб секции камеры (`CubicViewArea.centerCube`). Для той же позиции игрока это тот же куб, который `cc_updateViewCenter` пишет в клиентский кэш. Окно секций сдвигается, когда меняется секция камеры, в том числе при смене куба.
+2. Радиус XZ — ванильная дистанция прорисовки. Радиус Y — `CommonConfig.verticalViewDistance` в секциях (`verticalGridSize = distance * 2 + 1`). Значение читается в `ViewArea.setViewDistance` и лежит в поле `cc_verticalViewDistance`. Кадр toml не парсит.
+3. Уровень `CHUNK` этот радиус не применяет: высота сетки остаётся `Level.getSectionsCount()`.
+4. `MixinSectionOcclusionGraph` пускает обход к соседу сверху и снизу, если секция внутри прямоугольника радиусов. Ключ ожидания соседей — куб секции (`Coords.sectionToCube`), не сырые координаты секции.
+5. Меш берёт `BlockState` из `LevelCube` в `ClientCubeCache` (`cc_cubeForMesh`, `forceLoad=false`). Промах подставляет пустой куб: секция воздуха. `getChunk` колонки и `cc_read` не вызываются.
+6. После пакета куба `queueLightUpdate` зовёт `CubicSectionMesh.onCubeReady`: секции куба и соседняя кайма помечаются грязными, `cc_onCubeReadyToRender` будит occlusion.
+7. На 26.1 в `LevelChunkSection` нет массивов света, компилятор меша берёт яркость из `LevelLightEngine`. E8 не заливает секцию и не меняет `MixinLevelLightEngine`. Подмена `getRawBrightness` на `MAX_LEVEL` остаётся долгом E10 и не является политикой видимости: секция попадает в меш, потому что её куб есть в кэше.
 
-Экран загрузки (`CubicLevelLoadingScreen`, `WorldLoadingCubeStatusesRenderer`) читает `CloProgressListener` и не грузит кубы сам.
+Экран загрузки (`CubicLevelLoadingScreen`, `WorldLoadingCubeStatusesRenderer`) читает колонки через `ChunkLoadStatusView.get`. Если прогресс пришёл как `CloPos` (`CloPosProgress.cc_columnsAvailable() == false`), колонки не читаются и экран не падает. Статусы кубов берутся из `StoringCloProgressListener`. Экран кубы не создаёт.
 
 ## 7. Модули
 

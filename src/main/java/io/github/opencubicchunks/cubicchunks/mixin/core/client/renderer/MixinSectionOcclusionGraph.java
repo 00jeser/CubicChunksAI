@@ -12,10 +12,10 @@ import io.github.notstirred.dasm.api.annotations.transform.TransformFromMethod;
 import io.github.opencubicchunks.cc_core.api.CubePos;
 import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
+import io.github.opencubicchunks.cubicchunks.client.renderer.CubicViewArea;
 import io.github.opencubicchunks.cubicchunks.mixin.access.client.ViewAreaAccess;
 import io.github.opencubicchunks.cubicchunks.mixin.access.common.SectionOcclusionGraph$GraphEventsAccess;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
-import io.github.opencubicchunks.cubicchunks.server.level.CloTrackingView;
 import net.minecraft.client.renderer.SectionOcclusionGraph;
 import net.minecraft.client.renderer.ViewArea;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
@@ -80,22 +80,19 @@ public abstract class MixinSectionOcclusionGraph {
         if (!cc_isCubic) {
             return original.call(sectionPosLong);
         }
-        return CubePos.asLong(SectionPos.x(sectionPosLong), SectionPos.y(sectionPosLong), SectionPos.z(sectionPosLong));
+        return CubePos.asLong(Coords.sectionToCube(SectionPos.x(sectionPosLong)), Coords.sectionToCube(SectionPos.y(sectionPosLong)),
+                Coords.sectionToCube(SectionPos.z(sectionPosLong)));
     }
 
     @Inject(method = "isInViewDistance", at = @At("HEAD"), cancellable = true)
     private void cc_onIsInViewDistance(long originSectionPosLong, long sectionPosLong, CallbackInfoReturnable<Boolean> cir) {
-        if (!cc_isCubic) {
+        if (!cc_isCubic || this.viewArea == null) {
             return;
         }
-        int originCubeX = Coords.blockToCube(SectionPos.x(originSectionPosLong));
-        int originCubeY = Coords.blockToCube(SectionPos.y(originSectionPosLong));
-        int originCubeZ = Coords.blockToCube(SectionPos.z(originSectionPosLong));
-        int posCubeX = Coords.blockToCube(SectionPos.x(sectionPosLong));
-        int posCubeY = Coords.blockToCube(SectionPos.y(sectionPosLong));
-        int posCubeZ = Coords.blockToCube(SectionPos.z(sectionPosLong));
-        cir.setReturnValue(CloTrackingView.cc_isInViewDistance(originCubeX, originCubeY, originCubeZ,
-                Coords.sectionToCubeRenderDistance(this.viewArea.getViewDistance()), posCubeX, posCubeY, posCubeZ));
+        int verticalRadius = this.viewArea instanceof CubicViewArea.Radius radius ? radius.cc_verticalRadiusSections() : this.viewArea.getViewDistance();
+        cir.setReturnValue(CubicViewArea.containsSection(SectionPos.x(originSectionPosLong), SectionPos.y(originSectionPosLong),
+                SectionPos.z(originSectionPosLong), this.viewArea.getViewDistance(), verticalRadius, SectionPos.x(sectionPosLong),
+                SectionPos.y(sectionPosLong), SectionPos.z(sectionPosLong)));
     }
 
     @Inject(method = "getRelativeFrom", at = @At("HEAD"), cancellable = true)
