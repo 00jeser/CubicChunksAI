@@ -262,7 +262,7 @@ public abstract class MixinLevel implements CubicLevel, MarkableAsCubic, LevelAc
      * when the cube exists. Packing of {@link io.github.opencubicchunks.cc_core.api.CubePos} is the vertical limit.
      */
     @WrapOperation(method = { "isInWorldBounds",
-        "isInValidBounds" }, at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/LevelHeightAccessor;isInsideBuildHeight(Lnet/minecraft/core/BlockPos;)Z"))
+        "isInValidBounds" }, at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;isInsideBuildHeight(Lnet/minecraft/core/BlockPos;)Z"))
     private boolean cc_cubicInsideBuildHeight(Level level, BlockPos pos, Operation<Boolean> original) {
         if (!cc_isCubic) {
             return original.call(level, pos);
