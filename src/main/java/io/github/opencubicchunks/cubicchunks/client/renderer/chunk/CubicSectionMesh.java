@@ -25,20 +25,22 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 public final class CubicSectionMesh {
     private CubicSectionMesh() {}
 
+    /**
+     * Соседи, без которых ваниль не ставит секцию в компиляцию: восемь горизонтальных и секции сверху и снизу.
+     * Угловые по диагонали Y не требуются — крайний куб окна иначе никогда не собирает меш.
+     */
     public static boolean hasAllNeighbors(LongPredicate sectionExists, long sectionNode) {
         for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = -1; dy <= 1; dy++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    if (dx == 0 && dy == 0 && dz == 0) {
-                        continue;
-                    }
-                    if (!sectionExists.test(SectionPos.offset(sectionNode, dx, dy, dz))) {
-                        return false;
-                    }
+            for (int dz = -1; dz <= 1; dz++) {
+                if (dx == 0 && dz == 0) {
+                    continue;
+                }
+                if (!sectionExists.test(SectionPos.offset(sectionNode, dx, 0, dz))) {
+                    return false;
                 }
             }
         }
-        return true;
+        return sectionExists.test(SectionPos.offset(sectionNode, 0, 1, 0)) && sectionExists.test(SectionPos.offset(sectionNode, 0, -1, 0));
     }
 
     /**

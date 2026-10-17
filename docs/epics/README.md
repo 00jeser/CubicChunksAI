@@ -36,7 +36,7 @@ E1 → E2 → E3 → E4 → E5 → E6 → E7 → E8 → E9 → E10 → E11
 | [E5 — Стиль мира](e5-world-style.md) | done | 2 | `cc_isCubic` берётся из `WorldStyle`, измерение `CHUNK` остаётся ванильным | E4 |
 | [E6 — Серверная загрузка](e6-server-load.md) | done | 2 | Куб вокруг игрока доходит до `LevelCube` с синусоидой | E5 |
 | [E7 — Сеть и клиентский кэш](e7-network-cache.md) | done | 2 | Клиент принимает куб в `ClientCubeCache.Storage` | E6 |
-| [E8 — Рендер секций](e8-render.md) | planned | 2 | Синусоида видна в мире | E7 |
+| [E8 — Рендер секций](e8-render.md) | done | 2 | Синусоида видна в мире | E7 |
 | [E9 — Карты высот](e9-heightmaps.md) | planned | 3 | `CubeAccess` не кидает на heightmap, колонка знает кубы | E8 |
 | [E10 — Свет](e10-lighting.md) | planned | 3 | Яркость не подменена `LightBlock.MAX_LEVEL` | E9 |
 | [E11 — Сохранение](e11-persistence.md) | planned | 3 | Куб читается из 3D-региона после перезапуска | E10 |

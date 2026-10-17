@@ -1,22 +1,24 @@
 package io.github.opencubicchunks.cubicchunks.mixin.core.common.server.network;
 
+import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.function.ToIntFunction;
 
 import io.github.notstirred.dasm.api.annotations.Dasm;
 import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddMethodToSets;
-import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddTransformToSets;
 import io.github.notstirred.dasm.api.annotations.selector.Ref;
-import io.github.notstirred.dasm.api.annotations.transform.TransformFromMethod;
+import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
 import io.github.opencubicchunks.cubicchunks.network.CCClientboundForgetLevelCloPacket;
 import io.github.opencubicchunks.cubicchunks.network.CCClientboundLevelChunkPacket;
 import io.github.opencubicchunks.cubicchunks.network.CCClientboundLevelCubeWithLightPacket;
-import io.github.opencubicchunks.cubicchunks.world.entity.EntityCubePosGetter;
+import io.github.opencubicchunks.cubicchunks.world.level.CubicLevel;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.LevelClo;
+import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.network.protocol.game.ClientboundChunkBatchFinishedPacket;
@@ -27,6 +29,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.PlayerChunkSender;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.spongepowered.asm.mixin.Dynamic;
 import org.spongepowered.asm.mixin.Final;
@@ -50,10 +53,28 @@ public class MixinPlayerChunkSender {
     @Shadow private float batchQuota;
 
     @Shadow @Final private LongSet pendingChunks;
+    @Shadow @Final private boolean memoryConnection;
 
-    @AddTransformToSets(ChunkToCloSet.PlayerChunkSender_redirects.class)
-    @TransformFromMethod(value = "markChunkPendingToSend(Lnet/minecraft/world/level/chunk/LevelChunk;)V")
-    public native void cc_markCloPendingToSend(LevelClo clo);
+    /** Кубики, пакет которых уже ушёл этому игроку. Трекер DASM не ставит их в {@code pendingChunks}. */
+    @Unique
+    private final LongSet cc_sentCubes = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+
+    /** Сколько кубов вокруг игрока класть в очередь, если трекер DASM их туда не положил. */
+    @Unique
+    private static final int CC_ENQUEUE_RADIUS = 2;
+
+    /** {@code @TransformFromMethod} этой сигнатуры пропускается как {@code @Final}. Тело — то же, что у колонки: ключ в очередь. */
+    public void cc_markCloPendingToSend(LevelClo clo) {
+        this.pendingChunks.add(clo.cc_getCloPos().toLong());
+    }
+
+    /**
+     * DASM переписывает {@code ChunkMap.markChunkPendingToSend} так, что он зовёт этот оверлоад с {@link LevelClo}.
+     * У ванили есть только вариант с {@link LevelChunk}.
+     */
+    public void markChunkPendingToSend(LevelClo clo) {
+        this.cc_markCloPendingToSend(clo);
+    }
 
     @AddMethodToSets(containers = ChunkToCloSet.PlayerChunkSender_redirects.class, method = "dropChunk(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/level/ChunkPos;)V")
     public void cc_dropClo(ServerPlayer player, CloPos cloPos) {
@@ -74,41 +95,41 @@ public class MixinPlayerChunkSender {
             float f = Math.max(1.0F, this.desiredChunksPerTick);
             this.batchQuota = Math.min(this.batchQuota + this.desiredChunksPerTick, f);
             if (!(this.batchQuota < 1.0F)) {
+                this.cc_enqueueCubesAround(player);
                 if (!this.pendingChunks.isEmpty()) {
                     ServerLevel serverlevel = player.level();
                     ChunkMap chunkmap = serverlevel.getChunkSource().chunkMap;
-                    List<LevelClo> list = this.cc_collectChunksToSend(chunkmap, CloPos.cube(((EntityCubePosGetter) player).cc_cubePosition()));
-                    if (!list.isEmpty()) {
-                        ServerGamePacketListenerImpl servergamepacketlistenerimpl = player.connection;
-                        ++this.unacknowledgedBatches;
-
-                        // This packet can remain the same because it is just for timing purposes in order to determine how many chunks (or cubes) the
-                        // client should request
-                        servergamepacketlistenerimpl.send(ClientboundChunkBatchStartPacket.INSTANCE);
-
-                        // TODO P2 :: We need to send heightmap and lighting data, which would be contained in the Column
-
-                        // We need to send the chunks first before cubes, to ensure that load order invariants are preserved
-                        for (LevelClo levelClo : list) {
-                            if (levelClo instanceof LevelChunk) {
-                                cc_sendChunk(servergamepacketlistenerimpl, serverlevel, (LevelChunk) levelClo);
-                            }
-                        }
-
-                        for (LevelClo levelClo : list) {
-                            if (levelClo instanceof LevelCube) {
-                                cc_sendCube(servergamepacketlistenerimpl, serverlevel, (LevelCube) levelClo);
-                            }
-                        }
-
-                        // This packet can remain the same because it is just for timing purposes in order to determine how many chunks (or cubes) the
-                        // client should request
-                        servergamepacketlistenerimpl.send(new ClientboundChunkBatchFinishedPacket(list.size()));
-                        this.batchQuota -= (float) list.size();
+                    if (chunkmap == null) {
+                        return;
                     }
+                    List<LevelClo> list = this.cc_collectChunksToSend(chunkmap, CloPos.cube(Coords.blockToCube(player.blockPosition().getX()),
+                            Coords.blockToCube(player.blockPosition().getY()), Coords.blockToCube(player.blockPosition().getZ())));
+                    this.cc_sendBatch(player, serverlevel, list);
                 }
             }
         }
+    }
+
+    @Unique
+    private void cc_sendBatch(ServerPlayer player, ServerLevel level, List<LevelClo> list) {
+        if (list.isEmpty()) {
+            return;
+        }
+        ServerGamePacketListenerImpl packetListener = player.connection;
+        ++this.unacknowledgedBatches;
+        packetListener.send(ClientboundChunkBatchStartPacket.INSTANCE);
+        for (LevelClo levelClo : list) {
+            if (levelClo instanceof LevelChunk chunk) {
+                cc_sendChunk(packetListener, level, chunk);
+            }
+        }
+        for (LevelClo levelClo : list) {
+            if (levelClo instanceof LevelCube cube) {
+                cc_sendCube(packetListener, level, cube);
+            }
+        }
+        packetListener.send(new ClientboundChunkBatchFinishedPacket(list.size()));
+        this.batchQuota -= (float) list.size();
     }
 
     @Unique
@@ -137,8 +158,77 @@ public class MixinPlayerChunkSender {
         // net.neoforged.neoforge.event.EventHooks.fireChunkSent(packetListener.player, chunk, level);
     }
 
-    @TransformFromMethod(value = "collectChunksToSend(Lnet/minecraft/server/level/ChunkMap;Lnet/minecraft/world/level/ChunkPos;)Ljava/util/List;")
-    private native List<LevelClo> cc_collectChunksToSend(ChunkMap chunkMap, CloPos cloPos);
+    private void cc_enqueueCubesAround(ServerPlayer player) {
+        int centerX = Coords.blockToCube(player.blockPosition().getX());
+        int centerY = Coords.blockToCube(player.blockPosition().getY());
+        int centerZ = Coords.blockToCube(player.blockPosition().getZ());
+        for (int dx = -CC_ENQUEUE_RADIUS; dx <= CC_ENQUEUE_RADIUS; dx++) {
+            for (int dy = -CC_ENQUEUE_RADIUS; dy <= CC_ENQUEUE_RADIUS; dy++) {
+                for (int dz = -CC_ENQUEUE_RADIUS; dz <= CC_ENQUEUE_RADIUS; dz++) {
+                    long key = CloPos.cube(centerX + dx, centerY + dy, centerZ + dz).toLong();
+                    if (this.cc_sentCubes.contains(key)) {
+                        continue;
+                    }
+                    this.pendingChunks.add(key);
+                }
+            }
+        }
+    }
+
+    /**
+     * Сбор пакета. DASM-копия {@code collectChunksToSend} пропускается как {@code @Final}.
+     * Ключ куба режется через {@link CloPos#isCube(long)}, колонка — через {@code getChunkToSend}.
+     */
+    private List<LevelClo> cc_collectChunksToSend(ChunkMap chunkMap, CloPos cloPos) {
+        int maxBatch = Math.max(1, (int) this.batchQuota);
+        if (this.memoryConnection) {
+            maxBatch = Math.max(maxBatch, this.pendingChunks.size());
+        }
+        List<Long> keys = new ArrayList<>();
+        for (Long key : this.pendingChunks) {
+            keys.add(key);
+            if (keys.size() >= maxBatch) {
+                break;
+            }
+        }
+        ServerLevel level = cc_chunkMapLevel(chunkMap);
+        List<LevelClo> clos = new ArrayList<>();
+        for (long key : keys) {
+            LevelClo clo = cc_resolve(level, chunkMap, key);
+            if (clo == null) {
+                continue;
+            }
+            this.pendingChunks.remove(key);
+            if (CloPos.isCube(key)) {
+                this.cc_sentCubes.add(key);
+            }
+            clos.add(clo);
+        }
+        return clos;
+    }
+
+    private static LevelClo cc_resolve(ServerLevel level, ChunkMap chunkMap, long key) {
+        if (CloPos.isCube(key)) {
+            CloPos pos = CloPos.fromLong(key);
+            CubeAccess cube = ((CubicLevel) level).cc_getCube(pos.getX(), pos.getY(), pos.getZ(), ChunkStatus.FULL, false);
+            if (cube instanceof LevelCube levelCube) {
+                return levelCube;
+            }
+            return null;
+        }
+        LevelChunk chunk = chunkMap.getChunkToSend(key);
+        return (LevelClo) chunk;
+    }
+
+    private static ServerLevel cc_chunkMapLevel(ChunkMap chunkMap) {
+        try {
+            Field field = ChunkMap.class.getDeclaredField("level");
+            field.setAccessible(true);
+            return (ServerLevel) field.get(chunkMap);
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
 
     // FIXME these should probably have some kind of reasonable sort order - at the very least, chunks before cubes
     @Dynamic @Redirect(method = "cc_collectChunksToSend", at = @At(ordinal = 0, value = "INVOKE", target = "Ljava/util/Comparator;comparingInt(Ljava/util/function/ToIntFunction;)Ljava/util/Comparator;"), require = 0)

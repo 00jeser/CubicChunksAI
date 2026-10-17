@@ -26,6 +26,8 @@ public class TestCubicSectionMesh extends BaseTest {
         assertThat(CubicSectionMesh.hasAllNeighbors(node -> true, section)).isTrue();
         long unrelated = SectionPos.asLong(4, 4, 4);
         assertThat(CubicSectionMesh.hasAllNeighbors(node -> node != unrelated, section)).isTrue();
+        long verticalCorner = SectionPos.offset(section, 1, 1, 1);
+        assertThat(CubicSectionMesh.hasAllNeighbors(node -> node != verticalCorner, section)).isTrue();
     }
 
     @Test

@@ -1,17 +1,20 @@
 package io.github.opencubicchunks.cubicchunks.mixin.core.client.renderer;
 
+import java.lang.reflect.Method;
+import java.util.concurrent.atomic.AtomicReference;
+
 import javax.annotation.Nullable;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import io.github.notstirred.dasm.api.annotations.Dasm;
 import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddMethodToSets;
-import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddTransformToSets;
 import io.github.notstirred.dasm.api.annotations.selector.Ref;
-import io.github.notstirred.dasm.api.annotations.transform.TransformFromMethod;
 import io.github.opencubicchunks.cc_core.api.CubePos;
 import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
+import io.github.opencubicchunks.cubicchunks.CubicChunks;
+import io.github.opencubicchunks.cubicchunks.client.renderer.CubeOcclusionNotifier;
 import io.github.opencubicchunks.cubicchunks.client.renderer.CubicViewArea;
 import io.github.opencubicchunks.cubicchunks.mixin.access.client.ViewAreaAccess;
 import io.github.opencubicchunks.cubicchunks.mixin.access.common.SectionOcclusionGraph$GraphEventsAccess;
@@ -30,9 +33,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Dasm(value = ChunkToCubeSet.class, target = @Ref(SectionOcclusionGraph.class))
 @Mixin(SectionOcclusionGraph.class)
-public abstract class MixinSectionOcclusionGraph {
+public abstract class MixinSectionOcclusionGraph implements CubeOcclusionNotifier {
     private boolean cc_isCubic = false;
     @Shadow private @Nullable ViewArea viewArea;
+    @Shadow private AtomicReference<SectionOcclusionGraph.GraphEvents> nextGraphEvents;
+    @Shadow private AtomicReference<?> currentGraph;
 
     @Shadow protected abstract boolean isInViewDistance(long centerSectionPos, long sectionPos);
 
@@ -41,9 +46,28 @@ public abstract class MixinSectionOcclusionGraph {
         cc_isCubic = viewArea != null && ((CanBeCubic) viewArea.getLevelHeightAccessor()).cc_isCubic();
     }
 
-    @AddTransformToSets(ChunkToCubeSet.SectionOcclusionGraph_redirects.class)
-    @TransformFromMethod("onChunkReadyToRender(Lnet/minecraft/world/level/ChunkPos;)V")
-    public native void cc_onCubeReadyToRender(CubePos cubePos);
+    /**
+     * Тело {@code onChunkReadyToRender} для куба. DASM-трансформ пропускается как {@code @Final}, поэтому соседи отмечаются здесь.
+     */
+    public void cc_onCubeReadyToRender(CubePos cubePos) {
+        SectionOcclusionGraph.GraphEvents nextEvents = this.nextGraphEvents.get();
+        if (nextEvents != null) {
+            this.cc_addNeighbors(nextEvents, cubePos);
+        }
+        Object state = this.currentGraph.get();
+        if (state == null) {
+            return;
+        }
+        try {
+            Method eventsMethod = state.getClass().getMethod("events");
+            SectionOcclusionGraph.GraphEvents events = (SectionOcclusionGraph.GraphEvents) eventsMethod.invoke(state);
+            if (events != nextEvents) {
+                this.cc_addNeighbors(events, cubePos);
+            }
+        } catch (ReflectiveOperationException exception) {
+            CubicChunks.LOGGER.warn("cube occlusion notify failed for {}", cubePos, exception);
+        }
+    }
 
     @AddMethodToSets(containers = ChunkToCubeSet.SectionOcclusionGraph_redirects.class, method = "addNeighbors(Lnet/minecraft/client/renderer/SectionOcclusionGraph$GraphEvents;Lnet/minecraft/world/level/ChunkPos;)V")
     private void cc_addNeighbors(SectionOcclusionGraph.GraphEvents graphEvents, CubePos cubePos) {
@@ -89,7 +113,8 @@ public abstract class MixinSectionOcclusionGraph {
         if (!cc_isCubic || this.viewArea == null) {
             return;
         }
-        int verticalRadius = this.viewArea instanceof CubicViewArea.Radius radius ? radius.cc_verticalRadiusSections() : this.viewArea.getViewDistance();
+        int verticalRadius = this.viewArea instanceof CubicViewArea.Radius radius ? radius.cc_verticalRadiusSections()
+                : this.viewArea.getViewDistance();
         cir.setReturnValue(CubicViewArea.containsSection(SectionPos.x(originSectionPosLong), SectionPos.y(originSectionPosLong),
                 SectionPos.z(originSectionPosLong), this.viewArea.getViewDistance(), verticalRadius, SectionPos.x(sectionPosLong),
                 SectionPos.y(sectionPosLong), SectionPos.z(sectionPosLong)));

@@ -1,6 +1,6 @@
 # Клиентский кэш куба
 
-Как куб с сервера попадает в `ClientCubeCache`. Контракт — [ARCHITECTURE.md](ARCHITECTURE.md) §3. Рендер — E8, карты высот — E9, свет — E10.
+Как куб с сервера попадает в `ClientCubeCache`. Контракт — [ARCHITECTURE.md](ARCHITECTURE.md) §3. Меш секции — [ARCHITECTURE.md](ARCHITECTURE.md) §6. Карты высот — E9, свет — E10.
 
 ## Стиль клиента
 
