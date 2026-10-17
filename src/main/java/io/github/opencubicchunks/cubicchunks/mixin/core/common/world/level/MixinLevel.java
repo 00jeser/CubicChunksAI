@@ -52,7 +52,7 @@ public abstract class MixinLevel implements CubicLevel, MarkableAsCubic, LevelAc
 
     /**
      * Уровень без записанного стиля ведёт себя как ванильный.
-     * {@code ServerLevel} подменяет значение в {@code cc_onInit}. Клиентский уровень здесь не стилизуется (E7).
+     * {@code ServerLevel} подменяет значение в {@code cc_onInit}. {@code ClientLevel} берёт стиль из пакета в своём {@code cc_onInit}.
      */
     protected WorldStyle cc_worldStyle = WorldStyle.CHUNK;
 

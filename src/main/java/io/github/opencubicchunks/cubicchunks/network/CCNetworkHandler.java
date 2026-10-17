@@ -24,5 +24,7 @@ public class CCNetworkHandler {
                 new CCClientboundForgetLevelCloPacket.Handler());
         registrar.playToClient(CCClientboundSetCubeCacheCenterPacket.TYPE, CCClientboundSetCubeCacheCenterPacket.STREAM_CODEC,
                 new CCClientboundSetCubeCacheCenterPacket.Handler());
+        registrar.playToClient(CCClientboundLevelInfoPacket.TYPE, CCClientboundLevelInfoPacket.STREAM_CODEC,
+                new CCClientboundLevelInfoPacket.Handler());
     }
 }

@@ -65,12 +65,13 @@ CubeAccess
 └── CC_LOADING_PYRAMID_CUBES                       чтение региона — E11
 
 Клиент
-├── ClientCubeCache.Storage                        AtomicReferenceArray<LevelCube> по кубическому радиусу
-├── центр просмотра (x, y, z)                      CCClientboundSetCubeCacheCenterPacket
+├── ClientCubeCache.Storage                        AtomicReferenceArray<LevelCube>, радиус — большее из view distance и verticalViewDistance
+├── центр просмотра (x, y, z)                      CCClientboundSetCubeCacheCenterPacket; кубы вне радиуса забываются
+├── стиль измерения                                CCClientboundLevelInfoPacket до логина и респавна
 └── меш секции                                     ViewArea / RenderSection, E8
 ```
 
-`ServerLevel` пишет стиль в конструкторе, после `super()` и до `ServerChunkCache`. Источник — данные измерения `cubicchunks:world_style` (`<dimension>/data/cubicchunks/world_style.dat`). Ключа нет — новый уровень: перекрытие `ServerConfig` по id измерения, иначе при `generateNewWorldsAsCC` стиль `defaultWorldStyle`, иначе `CHUNK`. Файла `serverconfig/cubicchunks.toml` нет — `shouldGenerateNewWorldsAsCC()` даёт `CUBIC` или `CHUNK`. Уже записанный ключ toml не перебивает. `cc_setCubic()` вызывается только для `CUBIC` и `HYBRID`. В лог пишется `dimension=<id> style=<style> cubic=<bool>`. `ClientLevel` в конструкторе стиль не получает: клиентский кэш — E7. `generates2DChunks` у `HYBRID` и `CHUNK` на генерацию ещё не влияет — E12.
+`ServerLevel` пишет стиль в конструкторе, после `super()` и до `ServerChunkCache`. Источник — данные измерения `cubicchunks:world_style` (`<dimension>/data/cubicchunks/world_style.dat`). Ключа нет — новый уровень: перекрытие `ServerConfig` по id измерения, иначе при `generateNewWorldsAsCC` стиль `defaultWorldStyle`, иначе `CHUNK`. Файла `serverconfig/cubicchunks.toml` нет — `shouldGenerateNewWorldsAsCC()` даёт `CUBIC` или `CHUNK`. Уже записанный ключ toml не перебивает. `cc_setCubic()` вызывается только для `CUBIC` и `HYBRID`. В лог пишется `dimension=<id> style=<style> cubic=<bool>`. `ClientLevel` берёт тот же стиль из `CCClientboundLevelInfoPacket`: сервер шлёт его сразу перед `ClientboundLoginPacket` и `ClientboundRespawnPacket`, клиент кладёт стиль в очередь и применяет после `Level.<init>`, до `ClientChunkCache`. Без пакета стиль остаётся `CHUNK`, кубовый кэш не создаётся. `generates2DChunks` у `HYBRID` и `CHUNK` на генерацию ещё не влияет — E12.
 
 Нет в этом дереве и не появляется без нового эпика: отладочный оверлей, OptiFine-ветка, формат сейва 1.12, публичный API чужого `ChunkGenerator`.
 
@@ -82,8 +83,8 @@ CubeAccess
 2. `MixinChunkMap` поднимает `ChunkHolder`. Для куба держатель — `CubeHolder`.
 3. `MixinChunkGenerationTask` идёт по `CubePyramid`. Шаг зовёт метод `CubeStatusTasks`.
 4. Несделанный шаг возвращает `passThrough` и не пишет биомы, свет и карты высот. `generateNoise` пишет синусоиду (`SUPERFLAT_HEIGHT`, амплитуда 20) — это фактический генератор до E12. `full` поднимает `ProtoCube` в `LevelCube`; счётчик и лог ведёт `FullCubeTracker`. Вертикальный радиус тикетов игрока берётся из `CommonConfig.getVerticalViewDistance`.
-5. `MixinPlayerChunkSender` шлёт `CCClientboundLevelCubeWithLightPacket`. Имя пакета шире содержимого, пока нет света (E10) и карт высот (E9).
-6. `CCNetworkHandler` принимает пакет на клиентском потоке игры. `ClientCubeCache.cc_replaceWithPacketData` кладёт `LevelCube` в `Storage`.
+5. `MixinPlayerChunkSender` шлёт `CCClientboundLevelCubeWithLightPacket`, если `CloPos` — куб и уровень кубический. В буфере только `CubePos` и секции блоков. Световых массивов нет до E10, имя класса шире содержимого. Карты высот в пакет не пишутся: обработчик кладёт пустую `Map` (E9). На стиле `CHUNK` метод возвращается сразу, пакет куба не уходит.
+6. `CCNetworkHandler` принимает пакет на клиентском потоке игры. `ClientCubeCache.cc_replaceWithPacketData` кладёт `LevelCube` в `Storage`. Сдвиг центра (`CCClientboundSetCubeCacheCenterPacket`) двигает окно и забывает кубы вне радиуса. `CCClientboundForgetLevelCloPacket` зовёт `cc_drop`: куб уходит из клиентского `Storage` и не трогает серверный кэш.
 7. `MixinViewArea` перестраивает секции вокруг центра. Меш читает уже принятые секции и не ходит в регион и в конфиг.
 
 Колонка в кубическом измерении (`CCClientboundLevelChunkPacket`) несёт то, что ещё нужно 2D-коду (карты высот колонки). Это не второй куб.

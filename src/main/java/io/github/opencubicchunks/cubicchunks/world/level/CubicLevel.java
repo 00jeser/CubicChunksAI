@@ -6,7 +6,7 @@ import net.minecraft.core.BlockPos;
 
 public interface CubicLevel extends CubicLevelAccessor {
     /**
-     * Стиль этого уровня. У {@code ServerLevel} его записывает конструктор.
+     * Стиль этого уровня. У {@code ServerLevel} его записывает конструктор. У {@code ClientLevel} его приносит пакет перед логином и респавном.
      * {@code CHUNK} не входит в кубовый пайплайн.
      */
     CubicLevelHeightAccessor.WorldStyle cc_worldStyle();

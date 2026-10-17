@@ -2,6 +2,7 @@ package io.github.opencubicchunks.cubicchunks.mixin.core.client.multiplayer;
 
 import static io.github.opencubicchunks.cc_core.CubicChunksBase.LOGGER;
 import static io.github.opencubicchunks.cc_core.utils.Coords.cubeToSection;
+import static io.github.opencubicchunks.cc_core.utils.Coords.sectionToCubeCeil;
 
 import java.util.Map;
 import java.util.function.Consumer;
@@ -12,8 +13,8 @@ import io.github.notstirred.dasm.api.annotations.Dasm;
 import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddFieldToSets;
 import io.github.notstirred.dasm.api.annotations.selector.Ref;
 import io.github.opencubicchunks.cc_core.api.CubePos;
-import io.github.opencubicchunks.cc_core.api.CubicConstants;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
+import io.github.opencubicchunks.cubicchunks.CubicChunks;
 import io.github.opencubicchunks.cubicchunks.client.multiplayer.ClientCubeCache;
 import io.github.opencubicchunks.cubicchunks.client.multiplayer.CubicClientLevel;
 import io.github.opencubicchunks.cubicchunks.mixin.core.common.world.level.chunk.MixinChunkSource;
@@ -58,9 +59,10 @@ public abstract class MixinClientChunkCache extends MixinChunkSource implements 
         if (((CanBeCubic) level).cc_isCubic()) {
             cc_emptyCube = new EmptyLevelCube(level, CubePos.of(0, 0, 0),
                     level.registryAccess().lookupOrThrow(Registries.BIOME).getOrThrow(Biomes.PLAINS));
-            cc_cubeStorage = new ClientCubeCache.Storage(calculateStorageRange(viewDistance), level);
+            int cubeRadius = cc_cubeStorageRadius(viewDistance);
+            cc_cubeStorage = new ClientCubeCache.Storage(cubeRadius, level);
             // TODO we could redirect the initial construction instead of immediately resizing. doesn't really matter
-            updateViewRadius(cc_calculateChunkViewDistance(viewDistance));
+            updateViewRadius(ClientCubeCache.chunkViewDistanceCovering(cubeRadius));
         }
     }
 
@@ -144,9 +146,7 @@ public abstract class MixinClientChunkCache extends MixinChunkSource implements 
     @Shadow public abstract void updateViewCenter(int x, int z);
 
     @Override public void cc_updateViewCenter(int x, int y, int z) {
-        this.cc_cubeStorage.viewCenterX = x;
-        this.cc_cubeStorage.viewCenterY = y;
-        this.cc_cubeStorage.viewCenterZ = z;
+        this.cc_cubeStorage.setViewCenter(x, y, z);
         this.updateViewCenter(cubeToSection(x, 0), cubeToSection(z, 0));
     }
 
@@ -154,7 +154,7 @@ public abstract class MixinClientChunkCache extends MixinChunkSource implements 
 
     @Override public void cc_updateViewRadius(int viewDistance) {
         int i = this.cc_cubeStorage.cubeRadius;
-        int j = calculateStorageRange(viewDistance);
+        int j = cc_cubeStorageRadius(viewDistance);
         if (i != j) {
             ClientCubeCache.Storage storage = new ClientCubeCache.Storage(j, this.level);
             storage.viewCenterX = this.cc_cubeStorage.viewCenterX;
@@ -172,19 +172,20 @@ public abstract class MixinClientChunkCache extends MixinChunkSource implements 
             }
             this.cc_cubeStorage = storage;
         }
-        updateViewRadius(cc_calculateChunkViewDistance(viewDistance));
+        updateViewRadius(ClientCubeCache.chunkViewDistanceCovering(j));
     }
 
     @Shadow private static int calculateStorageRange(int viewDistance) {
         throw new IllegalStateException("mixin failed to apply");
     }
 
-    @SuppressWarnings("checkstyle:MagicNumber") // <-- TODO it's unclear what the 3 represents in vanilla?
-    private static int cc_calculateChunkViewDistance(int cubeViewDistance) {
-        int cubeStorageRange = calculateStorageRange(cubeViewDistance);
-        // TODO this radius might be larger than it needs to be? coordinate maths is difficult
-        int chunkStorageRange = CubicConstants.DIAMETER_IN_SECTIONS * (cubeStorageRange + 1);
-        return chunkStorageRange - 3; // This gives the view distance, which gets passed back into calculateStorageRange which will readd the 3
+    /**
+     * Чебышёвский радиус на все оси: большее из ванильной дистанции просмотра и {@code verticalViewDistance}. Пакет центра радиус не несёт.
+     */
+    private static int cc_cubeStorageRadius(int horizontalViewDistance) {
+        int horizontalRadius = calculateStorageRange(horizontalViewDistance);
+        int verticalRadius = calculateStorageRange(sectionToCubeCeil(CubicChunks.config().getVerticalViewDistance()));
+        return Math.max(horizontalRadius, verticalRadius);
     }
 
     // TODO gatherStats (only used for debug)
