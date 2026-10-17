@@ -24,6 +24,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.protocol.game.ClientboundLevelChunkPacketData;
 import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 public interface ClientCubeCache extends CubeSource {
@@ -42,6 +43,26 @@ public interface ClientCubeCache extends CubeSource {
     void cc_updateViewCenter(int x, int y, int z);
 
     void cc_updateViewRadius(int viewDistance);
+
+    /**
+     * Куб секции для меша. {@code forceLoad} ложный: промах не читает регион. Реализация клиента подставляет пустой куб.
+     */
+    default @Nullable LevelCube cc_cubeForMesh(int cubeX, int cubeY, int cubeZ) {
+        if (cc_getCube(cubeX, cubeY, cubeZ, ChunkStatus.FULL, false) instanceof LevelCube levelCube) {
+            return levelCube;
+        }
+        return null;
+    }
+
+    /**
+     * Дистанция колонок, в которую помещаются все секции куба на краю {@code cubeStorageRadius}. Ванильный {@code calculateStorageRange} прибавит 3
+     * обратно.
+     */
+    @SuppressWarnings("checkstyle:MagicNumber")
+    static int chunkViewDistanceCovering(int cubeStorageRadius) {
+        int chunkStorageRange = CubicConstants.DIAMETER_IN_SECTIONS * (cubeStorageRadius + 1);
+        return chunkStorageRange - 3;
+    }
 
     // Fields and methods on this are public so they can be accessed from MixinClientChunkCache and tests; they should not be used anywhere else
     // (This has to be here since we can't add inner classes with mixin)
@@ -158,6 +179,25 @@ public interface ClientCubeCache extends CubeSource {
         public boolean inRange(int x, int y, int z) {
             return Math.abs(x - this.viewCenterX) <= this.cubeRadius && Math.abs(y - this.viewCenterY) <= this.cubeRadius
                     && Math.abs(z - this.viewCenterZ) <= this.cubeRadius;
+        }
+
+        /**
+         * Сдвигает окно и забывает кубы, которые из него вышли. Пакет центра радиус не несёт.
+         */
+        public void setViewCenter(int x, int y, int z) {
+            this.viewCenterX = x;
+            this.viewCenterY = y;
+            this.viewCenterZ = z;
+            for (int index = 0; index < this.chunks.length(); index++) {
+                LevelCube levelCube = this.chunks.get(index);
+                if (levelCube == null) {
+                    continue;
+                }
+                CubePos cubePos = levelCube.cc_getCloPos().cubePos();
+                if (!this.inRange(cubePos.getX(), cubePos.getY(), cubePos.getZ())) {
+                    this.drop(index, levelCube);
+                }
+            }
         }
 
         @TransformFromMethod(owner = @Ref(ClientChunkCache.Storage.class), value = "getChunk(I)Lnet/minecraft/world/level/chunk/LevelChunk;", visibility = PUBLIC)

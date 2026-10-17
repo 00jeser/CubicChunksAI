@@ -13,10 +13,11 @@ import io.github.notstirred.dasm.api.annotations.redirect.redirects.AddTransform
 import io.github.notstirred.dasm.api.annotations.selector.Ref;
 import io.github.notstirred.dasm.api.annotations.transform.TransformFromMethod;
 import io.github.opencubicchunks.cc_core.utils.Coords;
-import io.github.opencubicchunks.cubicchunks.CubicChunks;
+import io.github.opencubicchunks.cc_core.world.CubicLevelHeightAccessor.WorldStyle;
 import io.github.opencubicchunks.cubicchunks.MarkableAsCubic;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
+import io.github.opencubicchunks.cubicchunks.world.level.CubicBuildHeight;
 import io.github.opencubicchunks.cubicchunks.world.level.CubicLevel;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeSource;
@@ -50,6 +51,16 @@ public abstract class MixinLevel implements CubicLevel, MarkableAsCubic, LevelAc
 
     protected boolean cc_isCubic;
 
+    /**
+     * Уровень без записанного стиля ведёт себя как ванильный.
+     * {@code ServerLevel} подменяет значение в {@code cc_onInit}. {@code ClientLevel} берёт стиль из пакета в своём {@code cc_onInit}.
+     */
+    protected WorldStyle cc_worldStyle = WorldStyle.CHUNK;
+
+    @Override public WorldStyle cc_worldStyle() {
+        return cc_worldStyle;
+    }
+
     @Override public void cc_setCubic() {
         cc_isCubic = true;
     }
@@ -72,13 +83,6 @@ public abstract class MixinLevel implements CubicLevel, MarkableAsCubic, LevelAc
             throw new IllegalStateException("Should always be able to create a cube!");
         } else {
             return cubeaccess;
-        }
-    }
-
-    @Inject(method = "<init>", at = @At(value = "CTOR_HEAD"))
-    private void cc_init(CallbackInfo ci) {
-        if (CubicChunks.config().shouldGenerateNewWorldsAsCC()) {
-            this.cc_setCubic();
         }
     }
 
@@ -249,6 +253,20 @@ public abstract class MixinLevel implements CubicLevel, MarkableAsCubic, LevelAc
         }
     }
 
-    // E4: Level.getCurrentDifficultyAt нет в 26.1.2 (не переименован). Подмена локальной сложности куба отложена.
-    // TODO: Phase 3 low priority: Add a method to modify isOutsideSpawnableHeight to respect the limits of the packing for CloPos
+    // Local difficulty for a cubic level is MixinServerLevel.cc_cubeDifficulty. Level itself has no getCurrentDifficultyAt.
+    // isOutsideSpawnableHeight on 26.1 is already ±20_000_000. Spawn search is E17.
+    // setblock's "out of this world" is isInWorldBounds → isInsideBuildHeight, which still uses vanilla min/max.
+
+    /**
+     * {@code /setblock} calls {@code isInWorldBounds} before {@code setBlock}. Vanilla build height rejects Y=-10001 even
+     * when the cube exists. Packing of {@link io.github.opencubicchunks.cc_core.api.CubePos} is the vertical limit.
+     */
+    @WrapOperation(method = { "isInWorldBounds",
+        "isInValidBounds" }, at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;isInsideBuildHeight(Lnet/minecraft/core/BlockPos;)Z"))
+    private boolean cc_cubicInsideBuildHeight(Level level, BlockPos pos, Operation<Boolean> original) {
+        if (!cc_isCubic) {
+            return original.call(level, pos);
+        }
+        return CubicBuildHeight.contains(pos);
+    }
 }

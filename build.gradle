@@ -392,6 +392,34 @@ tasks.withType(ProcessResources).configureEach {
     }
 }
 
+// The production jar must carry the javaheaders-linked core. Dev puts that jar on the
+// classpath; a normal NeoForge install does not, and FML then throws NoClassDefFoundError
+// for io.github.opencubicchunks.cc_core. Shading into this jar keeps one module. A nested
+// jar would split the package. Header stubs (cc_core/minecraft) are not runtime classes.
+// regionlib and noise stay off this jar: nothing in src/main or the linked core references
+// them until E11 and E12.
+tasks.named('jar', Jar).configure {
+    dependsOn(configurations.coreHeaderJar, 'patchDasmNeoforge')
+    inputs.files(configurations.coreHeaderJar)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from({ zipTree(configurations.coreHeaderJar.singleFile) }) {
+        exclude 'META-INF/MANIFEST.MF'
+        exclude 'META-INF/*.SF'
+        exclude 'META-INF/*.DSA'
+        exclude 'META-INF/*.RSA'
+        exclude 'META-INF/neoforge.mods.toml'
+        exclude 'io/github/opencubicchunks/cc_core/minecraft/**'
+    }
+}
+
+// jarJar resolves the patched dasm file through the javaheaders transform. On a clean
+// tree that file does not exist until patchDasmNeoforge runs.
+tasks.configureEach {
+    if (name == 'jarJar') {
+        dependsOn('patchDasmNeoforge')
+    }
+}
+
 // Force various tasks to run on intellij refresh
 neoForge {
     ideSyncTask project("CubicChunksCore").getTasksByName("assemble", false)[0]

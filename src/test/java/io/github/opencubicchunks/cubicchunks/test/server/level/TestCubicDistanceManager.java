@@ -13,12 +13,15 @@ import java.util.concurrent.Executor;
 import javax.annotation.Nullable;
 
 import io.github.opencubicchunks.cc_core.world.level.CloPos;
+import io.github.opencubicchunks.cubicchunks.CubicChunks;
 import io.github.opencubicchunks.cubicchunks.MarkableAsCubic;
+import io.github.opencubicchunks.cubicchunks.mixin.access.common.DistanceManagerAccess;
 import io.github.opencubicchunks.cubicchunks.mixin.core.common.server.level.MixinDistanceManager;
 import io.github.opencubicchunks.cubicchunks.mixin.core.common.server.level.MixinPlayerTicketTracker;
 import io.github.opencubicchunks.cubicchunks.mixin.test.common.server.level.CubicDistanceManagerTestAccess;
 import io.github.opencubicchunks.cubicchunks.testutils.BaseTest;
 import io.github.opencubicchunks.cubicchunks.world.level.CubicTicketStorage;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkMap;
@@ -298,6 +301,80 @@ public class TestCubicDistanceManager extends BaseTest {
         var distanceManager = setupDistanceManager(ticketStorage);
         ((MarkableAsCubic) distanceManager).cc_setCubic();
         ((CubicDistanceManagerTestAccess) distanceManager).get_playerTicketManager().runAllUpdates();
+    }
+
+    @Test
+    public void verticalViewDistanceChangesCubeTicketCount() {
+        try {
+            int wideCount = cubePlayerLoadingTickets(8);
+            int narrowCount = cubePlayerLoadingTickets(2);
+            assertTrue(wideCount > narrowCount, "vertical view distance 8 tickets=" + wideCount + " distance 2 tickets=" + narrowCount);
+            assertTrue(narrowCount > 0);
+        } finally {
+            CubicChunks.config().setVerticalViewDistance(8);
+        }
+    }
+
+    @Test
+    public void chunkStyleHasNoCubePlayerTickets() {
+        var ticketStorage = new TicketStorage();
+        DistanceManager distanceManager = new TestDistanceManager(ticketStorage, Runnable::run, Runnable::run);
+        ((CubicDistanceManagerTestAccess) distanceManager).get_playerTicketManager().updateViewDistance(10);
+        SectionPos pos = SectionPos.of(0, 4, 0);
+        distanceManager.addPlayer(pos, mock(ServerPlayer.class));
+        ((CubicDistanceManagerTestAccess) distanceManager).get_playerTicketManager().runAllUpdates();
+        assertEquals(0, countPlayerLoadingCubes(ticketStorage, 10));
+        boolean columnTicket = ticketStorage.getTickets(pos.chunk().pack()).stream()
+                .anyMatch(ticket -> ticket.getType() == TicketType.PLAYER_SIMULATION || ticket.getType() == TicketType.PLAYER_LOADING);
+        assertTrue(columnTicket);
+        assertFalse(CloPos.isCube(pos.chunk().pack()));
+    }
+
+    private int cubePlayerLoadingTickets(int verticalSections) {
+        CubicChunks.config().setVerticalViewDistance(verticalSections);
+        var ticketStorage = new TicketStorage();
+        DistanceManager distanceManager = new TestDistanceManager(ticketStorage, Runnable::run, Runnable::run);
+        ((MarkableAsCubic) distanceManager).cc_setCubic();
+        var tracker = ((CubicDistanceManagerTestAccess) distanceManager).get_playerTicketManager();
+        tracker.updateViewDistance(10);
+        SectionPos pos = SectionPos.of(0, 0, 0);
+        distanceManager.addPlayer(pos, mock(ServerPlayer.class));
+        tracker.runAllUpdates();
+        // The ticket dispatcher only runs a few cube tasks at once. Release finished slots so the rest of the radius lands in storage.
+        drainPlayerLoadingTickets(distanceManager);
+        assertTrue(CloPos.section(pos).isCube());
+        assertTrue(
+                ticketStorage.getTickets(CloPos.section(pos).toLong()).stream().anyMatch(ticket -> ticket.getType() == TicketType.PLAYER_SIMULATION));
+        return countPlayerLoadingCubes(ticketStorage, 10);
+    }
+
+    private static void drainPlayerLoadingTickets(DistanceManager distanceManager) {
+        DistanceManagerAccess access = (DistanceManagerAccess) distanceManager;
+        LongSet pending = access.cc_ticketsToRelease();
+        for (int pass = 0; pass < 4096 && !pending.isEmpty(); pass++) {
+            long[] keys = pending.toLongArray();
+            pending.clear();
+            for (long key : keys) {
+                access.cc_ticketDispatcher().release(key, () -> {}, false);
+            }
+        }
+    }
+
+    private static int countPlayerLoadingCubes(TicketStorage ticketStorage, int radius) {
+        int count = 0;
+        for (int y = -radius; y <= radius; y++) {
+            for (int x = -radius; x <= radius; x++) {
+                for (int z = -radius; z <= radius; z++) {
+                    long key = CloPos.cube(x, y, z).toLong();
+                    for (Ticket ticket : ticketStorage.getTickets(key)) {
+                        if (ticket.getType() == TicketType.PLAYER_LOADING) {
+                            count++;
+                        }
+                    }
+                }
+            }
+        }
+        return count;
     }
 
 }

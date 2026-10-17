@@ -8,6 +8,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -52,7 +53,15 @@ public abstract class JavaHeadersLinkTransform implements TransformAction<JavaHe
         File input = getInputArtifact().get().getAsFile();
         String name = input.getName();
         if (!Pattern.compile(getParameters().getAcceptedJars().get()).matcher(name).matches()) {
-            outputs.file(input);
+            // outputs.file(input) tells Gradle the output IS the input. That file must already
+            // exist, so a jar produced by an earlier task (the patched dasm jar) fails the first
+            // build. Copy into a real transform output instead.
+            File output = outputs.file(name);
+            try {
+                Files.copy(input.toPath(), output.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            } catch (Exception e) {
+                throw new GradleException("javaheaders pass-through failed for " + name, e);
+            }
             return;
         }
         String baseName = name.substring(0, name.lastIndexOf('.'));

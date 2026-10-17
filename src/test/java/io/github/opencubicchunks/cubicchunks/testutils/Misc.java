@@ -7,7 +7,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
+import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
@@ -38,6 +41,7 @@ import net.minecraft.world.level.chunk.PalettedContainerFactory;
 import net.minecraft.world.level.chunk.Strategy;
 import net.minecraft.world.level.dimension.LevelStem;
 import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import org.mockito.Answers;
 import org.mockito.MockedStatic;
@@ -76,8 +80,48 @@ public class Misc {
     }
 
     public static CloseableReference<ServerLevel> setupServerLevel() {
-        MockedStatic<RandomState> randomStateMockedStatic = Mockito.mockStatic(RandomState.class,
-                withSettings().defaultAnswer(Answers.RETURNS_DEEP_STUBS));
+        try {
+            return setupServerLevel(Files.createTempDirectory("cc_test"), null);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * @param dimension измерение уровня. {@code null} — прежняя заглушка без настоящего id (один путь оверворлда).
+     */
+    public static CloseableReference<ServerLevel> setupServerLevel(Path worldRoot, @Nullable ResourceKey<Level> dimension) {
+        MockedStatic<RandomState> randomStateMockedStatic = mockRandomState();
+        try {
+            return new CloseableReference<>(newServerLevel(worldRoot, dimension), randomStateMockedStatic);
+        } catch (RuntimeException | Error ex) {
+            randomStateMockedStatic.close();
+            throw ex;
+        }
+    }
+
+    /**
+     * Несколько измерений одного мира. Один мок {@link RandomState} на все уровни: два статических мока в одном потоке нельзя.
+     */
+    public static CloseableReference<List<ServerLevel>> setupServerLevels(Path worldRoot, List<ResourceKey<Level>> dimensions) {
+        MockedStatic<RandomState> randomStateMockedStatic = mockRandomState();
+        try {
+            List<ServerLevel> levels = new ArrayList<>();
+            for (ResourceKey<Level> dimension : dimensions) {
+                levels.add(newServerLevel(worldRoot, dimension));
+            }
+            return new CloseableReference<>(levels, randomStateMockedStatic);
+        } catch (RuntimeException | Error ex) {
+            randomStateMockedStatic.close();
+            throw ex;
+        }
+    }
+
+    private static MockedStatic<RandomState> mockRandomState() {
+        return Mockito.mockStatic(RandomState.class, withSettings().defaultAnswer(Answers.RETURNS_DEEP_STUBS));
+    }
+
+    private static ServerLevel newServerLevel(Path worldRoot, @Nullable ResourceKey<Level> dimension) {
         ChunkGenerator noiseBasedChunkGeneratorMock = mock(ChunkGenerator.class, withSettings().defaultAnswer(Answers.RETURNS_DEEP_STUBS));
         when(noiseBasedChunkGeneratorMock.createBiomes(any(), any(), any(), any()))
                 .thenAnswer(i -> CompletableFuture.completedFuture(i.getArguments()[4]));
@@ -86,17 +130,25 @@ public class Misc {
         LevelStem levelStemMock = mock(Mockito.RETURNS_DEEP_STUBS);
         when(levelStemMock.type().value().height()).thenReturn(384);
         LevelStorageSource.LevelStorageAccess levelStorageAccessMock = mock(Mockito.RETURNS_DEEP_STUBS);
-        try {
-            when(levelStorageAccessMock.getDimensionPath(any())).thenReturn(Files.createTempDirectory("cc_test"));
-        } catch (Exception e) {
-            e.printStackTrace();
+        if (dimension == null) {
+            when(levelStorageAccessMock.getDimensionPath(any()))
+                    .thenReturn(worldRoot.resolve("dimensions").resolve("minecraft").resolve("overworld"));
+        } else {
+            when(levelStorageAccessMock.getDimensionPath(any())).thenAnswer(invocation -> {
+                ResourceKey<Level> key = invocation.getArgument(0);
+                Identifier id = key.identifier();
+                return worldRoot.resolve("dimensions").resolve(id.getNamespace()).resolve(id.getPath());
+            });
         }
-        return new CloseableReference<>(new ServerLevel(mock(RETURNS_DEEP_STUBS),
+        when(levelStorageAccessMock.getLevelPath(any(LevelResource.class)))
+                .thenAnswer(invocation -> worldRoot.resolve(invocation.<LevelResource>getArgument(0).id()));
+        ResourceKey<Level> dimensionKey = dimension == null ? mock(RETURNS_DEEP_STUBS) : dimension;
+        return new ServerLevel(mock(RETURNS_DEEP_STUBS),
                 // We run everything on the main thread as Mockito has race conditions when multiple threads call into it
                 // (which occurs when using RETURNS_DEEP_STUBS)
-                Runnable::run, levelStorageAccessMock, mock(RETURNS_DEEP_STUBS), mock(RETURNS_DEEP_STUBS), levelStemMock,
+                Runnable::run, levelStorageAccessMock, mock(RETURNS_DEEP_STUBS), dimensionKey, levelStemMock,
                 // E4: ChunkProgressListener больше не аргумент конструктора ServerLevel.
-                false, 0, List.of(), false), randomStateMockedStatic);
+                false, 0, List.of(), false);
     }
 
     /**

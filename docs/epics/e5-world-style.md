@@ -1,7 +1,7 @@
 # E5 — Стиль мира
 
 **Этап ТЗ:** 2. Кубический мир виден  
-**Статус:** planned  
+**Статус:** done  
 **Зависимости:** [E4](e4-signature-port.md)  
 **Следующий:** [E6](e6-server-load.md)
 
@@ -167,3 +167,13 @@ S1 поле стиля → S2 запись в данные уровня → S3 �
 - Приёмка прогнана
 - ARCHITECTURE §2 обновлён
 - Регрессия E4 цела
+
+## Итог
+
+Стиль пишется в конструкторе `ServerLevel` сразу после `super()`: инициализаторы `MixinLevel` уже прошли, а `ServerChunkCache` ещё не читал `cc_isCubic`. `CTOR_HEAD` для этого поздно — поля миксина сбрасываются в `super()`.
+
+Ключ `cubicchunks:world_style` пишется тем же NBT-конвертом, что `SavedDataStorage` (`data` + `DataVersion`), напрямую через `NbtIo`. Живой `SavedDataStorage.encode` в тесте упирается в реестры; кодек стиля их не требует.
+
+Два измерения проверяются двумя `ServerLevel` в одном процессе и одной папке мира, не отдельным dedicated-сервером. `MixinChunkMap` не зовёт `cc_prepareTickingChunk` на стиле `CHUNK`: предикат `CubicTicking.preparesTickingCubes`. Сам кубовый тик по-прежнему пустой.
+
+`ClientLevel` стиль не получает — клиентский кэш в E7. `generates2DChunks` на задачи чанка не влияет — E12. Экран и полировка ошибки `ServerConfig` — E19: кривая строка уже бросает `IllegalArgumentException` с именем ключа, файл toml при чтении не переписывается. `cc_tickCube` пустой, `cc_save` возвращает `false`. Миграции старых миров нет: нет ключа и `generateNewWorldsAsCC=false` — стиль `CHUNK`.

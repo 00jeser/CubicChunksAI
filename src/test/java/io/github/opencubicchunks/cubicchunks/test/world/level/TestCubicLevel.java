@@ -50,6 +50,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkSource;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.dimension.LevelStem;
@@ -57,6 +58,7 @@ import net.minecraft.world.level.entity.LevelEntityGetter;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.saveddata.maps.MapId;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import net.minecraft.world.level.storage.LevelData;
@@ -88,8 +90,15 @@ public class TestCubicLevel extends BaseTest {
                 int maxChainedNeighborUpdates
         ) {
             super(levelData, dimension, registryAccess, dimensionTypeRegistration, isClientSide, isDebug, biomeZoomSeed, maxChainedNeighborUpdates);
-            when(((CubeSource) mockChunkSource).cc_getCube(anyInt(), anyInt(), anyInt(), anyBoolean())).thenReturn(mock(LevelCube.class));
-            when(((CubeSource) mockChunkSource).cc_getCube(anyInt(), anyInt(), anyInt(), any(), anyBoolean())).thenReturn(mock(LevelCube.class));
+            // Cubic bounds now include Y=0, so getBlockState reaches the cube and also the vanilla column cast.
+            BlockState blockState = mock(BlockState.class);
+            when(blockState.entityCanStandOnFace(any(), any(), any(), any())).thenReturn(true);
+            LevelCube cube = mock(LevelCube.class);
+            when(cube.getBlockState(any())).thenReturn(blockState);
+            when(cube.getFluidState(any())).thenReturn(mock(FluidState.class));
+            when(((CubeSource) mockChunkSource).cc_getCube(anyInt(), anyInt(), anyInt(), anyBoolean())).thenReturn(cube);
+            when(((CubeSource) mockChunkSource).cc_getCube(anyInt(), anyInt(), anyInt(), any(), anyBoolean())).thenReturn(cube);
+            when(mockChunkSource.getChunk(anyInt(), anyInt(), any(), anyBoolean())).thenReturn(mock(LevelChunk.class));
         }
 
         @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {

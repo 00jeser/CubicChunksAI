@@ -1,6 +1,7 @@
 package io.github.opencubicchunks.cubicchunks.integrationtest.server.level;
 
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -16,17 +17,17 @@ import java.util.List;
 import java.util.Map;
 
 import io.github.opencubicchunks.cc_core.api.CubicConstants;
-import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
 import io.github.opencubicchunks.cubicchunks.mixin.test.common.server.level.ChunkMapTestAccess;
 import io.github.opencubicchunks.cubicchunks.mixin.test.common.server.level.GenerationChunkHolderTestAccess;
-import io.github.opencubicchunks.cubicchunks.mixin.test.common.server.level.ServerChunkCacheTestAccess;
 import io.github.opencubicchunks.cubicchunks.server.level.CloHolder;
 import io.github.opencubicchunks.cubicchunks.server.level.CubeLevel;
+import io.github.opencubicchunks.cubicchunks.server.level.ServerCubeCache;
 import io.github.opencubicchunks.cubicchunks.testutils.BaseTest;
 import io.github.opencubicchunks.cubicchunks.testutils.CloseableReference;
 import io.github.opencubicchunks.cubicchunks.testutils.DummyChunkProgressListener;
+import io.github.opencubicchunks.cubicchunks.testutils.Misc;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap;
 import net.minecraft.core.HolderGetter;
@@ -36,7 +37,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ChunkLevel;
 import net.minecraft.server.level.ChunkMap;
-import net.minecraft.server.level.ChunkResult;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
@@ -45,12 +45,13 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.FlatLevelSource;
+import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
+import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
 import net.minecraft.world.level.levelgen.placement.PlacedFeature;
 import net.minecraft.world.level.levelgen.structure.StructureSet;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import net.neoforged.testframework.junit.EphemeralTestServerProvider;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
@@ -176,74 +177,56 @@ public class IntegrationTestCubicChunkMap extends BaseTest {
     }
 
     /**
-     * Load a single cube at full status
+     * One cube at {@link ChunkStatus#FULL}, plus the columns generation actually created.
+     * Pre-scheduling every cube out to {@link CubeLevel#MAX_LEVEL} fills the 2GB test heap once those cubes store blocks.
      */
-//    @LongRunTest
-    @Disabled // E6: загрузка куба не завершается, пока шаги генерации — passThrough
-    @ExtendWith(EphemeralTestServerProvider.class)
     @Test
-    public void singleFullCube(MinecraftServer server) throws Exception {
-        try (var serverChunkCacheRef = createServerChunkCache(false, server.registryAccess())) {
+    public void singleFullCube() throws Exception {
+        var randomState = Mockito.mockStatic(RandomState.class, withSettings().defaultAnswer(Answers.RETURNS_DEEP_STUBS));
+        try (randomState; var serverChunkCacheRef = createNoiseCubeCache()) {
             var serverChunkCache = serverChunkCacheRef.value();
             var chunkMap = serverChunkCache.chunkMap;
-
-            var centerLevel = CubeLevel.byCubeStatus(ChunkStatus.FULL);
-
-            var radius = CubeLevel.MAX_LEVEL - centerLevel;
-
-            ChunkHolder centerHolder = null;
-
-            for (int x = -radius; x <= radius; x++) {
-                for (int z = -radius; z <= radius; z++) {
-                    // We want the chunks intersecting this column of cubes to be loaded at the maximum level of any of those cubes;
-                    // this occurs when dy=0, so we only consider x/z distance
-                    int chunkDistance = Math.max(Math.abs(z), Math.abs(x));
-                    for (int sectionZ = 0; sectionZ < CubicConstants.DIAMETER_IN_SECTIONS; sectionZ++) {
-                        for (int sectionX = 0; sectionX < CubicConstants.DIAMETER_IN_SECTIONS; sectionX++) {
-                            var holder = ((ChunkMapTestAccess) chunkMap).invokeUpdateChunkScheduling(
-                                    CloPos.chunkAsLong(Coords.cubeToSection(x, sectionX), Coords.cubeToSection(z, sectionZ)),
-                                    centerLevel + chunkDistance, null, ChunkLevel.MAX_LEVEL + 1);
-                            ((GenerationChunkHolderTestAccess) holder).invokeUpdateHighestAllowedStatus(chunkMap);
-                        }
-                    }
-                    for (int y = -radius; y <= radius; y++) {
-                        var holder = ((ChunkMapTestAccess) chunkMap).invokeUpdateChunkScheduling(CloPos.cubeAsLong(x, y, z),
-                                centerLevel + Math.max(Math.abs(y), chunkDistance), null, ChunkLevel.MAX_LEVEL + 1);
-                        ((GenerationChunkHolderTestAccess) holder).invokeUpdateHighestAllowedStatus(chunkMap);
-                        if (x == 0 && z == 0 && y == 0) {
-                            centerHolder = holder;
-                        }
-                    }
-                }
-            }
-
-            var future = chunkMap.prepareAccessibleChunk(centerHolder);
-
-            Map<CloPos, List<ChunkHolder>> chunksByCubeColumn = new HashMap<>();
-            List<ChunkHolder> cubes = new ArrayList<>();
-            while (!(future.isDone() || future.isCompletedExceptionally())) {
-                assertChunkCubeLoadOrder(chunkMap, chunksByCubeColumn, cubes);
-                ServerChunkCache.MainThreadExecutor mainThreadProcessor = ((ServerChunkCacheTestAccess) serverChunkCache).getMainThreadProcessor();
-                serverChunkCache.pollTask();
-                System.out.println(mainThreadProcessor.getPendingTasksCount());
-            }
-            var result = (ChunkResult<LevelCube>) (Object) future.get();
-            assertTrue(result.isSuccess(), () -> "Full chunk future ChunkResult should be successful, but was " + result.getError());
-            assertTrue(result.orElse(null).getPersistedStatus().isOrAfter(ChunkStatus.FULL),
-                    () -> "Cube should be at full status, but has status " + result.orElse(null).getPersistedStatus());
-            assertInstanceOf(LevelCube.class, result.orElse(null));
+            var cube = ((ServerCubeCache) serverChunkCache).cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
+            assertInstanceOf(LevelCube.class, cube);
+            assertTrue(cube.getPersistedStatus().isOrAfter(ChunkStatus.FULL));
             for (int sectionZ = 0; sectionZ < CubicConstants.DIAMETER_IN_SECTIONS; sectionZ++) {
                 for (int sectionX = 0; sectionX < CubicConstants.DIAMETER_IN_SECTIONS; sectionX++) {
-                    ChunkStatus status = chunkMap.getVisibleChunkIfPresent(ChunkPos.pack(sectionX, sectionZ)).getPersistedStatus();
-                    int finalSectionX = sectionX; // java why
+                    var holder = chunkMap.getVisibleChunkIfPresent(ChunkPos.pack(sectionX, sectionZ));
+                    int finalSectionX = sectionX;
                     int finalSectionZ = sectionZ;
-                    assertTrue(status.isOrAfter(ChunkStatus.FULL), () -> "Chunks intersecting the center cube should be at full status, but "
-                            + finalSectionX + ", " + finalSectionZ + " has status " + status);
+                    assertTrue(holder != null && holder.getPersistedStatus().isOrAfter(ChunkStatus.FULL),
+                            () -> "Chunks intersecting the center cube should be at full status, but " + finalSectionX + ", " + finalSectionZ
+                                    + " has status " + (holder == null ? "missing" : holder.getPersistedStatus()));
                 }
             }
-
-            assertChunkCubeLoadOrder(chunkMap, chunksByCubeColumn, cubes);
+            assertChunkCubeLoadOrder(chunkMap, new HashMap<>(), new ArrayList<>());
         }
+    }
+
+    private CloseableReference<ServerChunkCache> createNoiseCubeCache() throws IOException, NoSuchFieldException, IllegalAccessException {
+        NoiseBasedChunkGenerator generator = mock(NoiseBasedChunkGenerator.class);
+        when(generator.generatorSettings()).thenReturn(mock());
+        ServerLevel serverLevelMock;
+        try (var ignored = Mockito.mockConstruction(ServerChunkCache.class, withSettings().defaultAnswer(Answers.RETURNS_DEEP_STUBS))) {
+            serverLevelMock = mock(withSettings().defaultAnswer(Mockito.RETURNS_DEEP_STUBS).extraInterfaces(CanBeCubic.class));
+        }
+        var cubicFlag = serverLevelMock.getClass().getSuperclass().getSuperclass().getDeclaredField("cc_isCubic");
+        cubicFlag.setAccessible(true);
+        cubicFlag.set(serverLevelMock, true);
+        when(((CanBeCubic) serverLevelMock).cc_isCubic()).thenReturn(true);
+        var blockPalette = Misc.palettedContainerFactory();
+        when(serverLevelMock.palettedContainerFactory()).thenReturn(blockPalette);
+        when(serverLevelMock.getHeight()).thenReturn(384);
+        when(serverLevelMock.getSectionsCount()).thenReturn(24);
+        LevelStorageSource.LevelStorageAccess levelStorageAccessMock = mock(Mockito.RETURNS_DEEP_STUBS);
+        when(levelStorageAccessMock.getDimensionPath(any())).thenReturn(Files.createTempDirectory("cc_test"));
+        var serverChunkCache = new ServerChunkCache(serverLevelMock, levelStorageAccessMock, mock(Mockito.RETURNS_DEEP_STUBS),
+                mock(Mockito.RETURNS_DEEP_STUBS), Runnable::run, generator, 10, 10, false, (pos, status) -> {}, mock(Mockito.RETURNS_DEEP_STUBS));
+        var chunkSource = serverLevelMock.getClass().getSuperclass().getDeclaredField("chunkSource");
+        chunkSource.setAccessible(true);
+        chunkSource.set(serverLevelMock, serverChunkCache);
+        when(serverLevelMock.getChunkSource()).thenReturn(serverChunkCache);
+        return new CloseableReference<>(serverChunkCache);
     }
 
     private static void assertChunkCubeLoadOrder(ChunkMap chunkMap, Map<CloPos, List<ChunkHolder>> chunksByCubeColumn, List<ChunkHolder> cubes) {
@@ -265,7 +248,7 @@ public class IntegrationTestCubicChunkMap extends BaseTest {
         cubes.forEach(cubeHolder -> {
             CloPos cubeCloPos = ((CloHolder) cubeHolder).cc_getCloPos();
             List<ChunkHolder> chunksInCubeColumn = chunksByCubeColumn.get(cubeCloPos.correspondingCubeCloPos(0));
-
+            assertNotNull(chunksInCubeColumn, () -> "cube " + cubeCloPos + " has no column chunks");
             chunksInCubeColumn.forEach(chunkHolder -> assertChunkHolderValidForCubeHolder(chunkHolder, cubeHolder));
         });
     }

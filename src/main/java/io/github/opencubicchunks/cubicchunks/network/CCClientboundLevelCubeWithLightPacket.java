@@ -9,10 +9,8 @@ import java.util.function.Consumer;
 import io.github.opencubicchunks.cc_core.api.CubePos;
 import io.github.opencubicchunks.cubicchunks.CubicChunks;
 import io.github.opencubicchunks.cubicchunks.client.multiplayer.ClientCubeCache;
-import io.github.opencubicchunks.cubicchunks.client.renderer.CubicLevelRenderer;
-import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeSource;
+import io.github.opencubicchunks.cubicchunks.client.renderer.chunk.CubicSectionMesh;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -59,16 +57,9 @@ public record CCClientboundLevelCubeWithLightPacket(CubePos pos, CCClientboundLe
             ((ClientCubeCache) (level.getChunkSource())).cc_replaceWithPacketData(x, y, z, payload.cubeData.getReadBuffer(), heightmaps,
                     entityTagConsumer);
 
-            // TODO P2 :: Vanilla does light updates at this point
-//            ClientboundLightUpdatePacketData clientboundlightupdatepacketdata = payload.getLightData();
-            ((ClientLevel) level).queueLightUpdate(() -> {
-//                this.applyLightData(i, j, clientboundlightupdatepacketdata, false);
-                LevelCube levelCube = ((CubeSource) level.getChunkSource()).cc_getCube(x, y, z, false);
-                if (levelCube != null) {
-//                    this.enableChunkLight(levelCube, i, j);
-                    ((CubicLevelRenderer) Minecraft.getInstance().levelRenderer).cc_onCubeReadyToRender(payload.pos);
-                }
-            });
+            // Световых массивов в буфере нет до E10. Здесь только перестройка меша уже принятых секций.
+            CubePos ready = CubePos.of(x, y, z);
+            ((ClientLevel) level).queueLightUpdate(() -> CubicSectionMesh.onCubeReady((ClientLevel) level, ready));
         }
     }
 }

@@ -3,6 +3,7 @@ package io.github.opencubicchunks.cubicchunks.test.client.multiplayer;
 import static io.github.opencubicchunks.cc_core.utils.Coords.cubeToSection;
 import static io.github.opencubicchunks.cubicchunks.testutils.Misc.assertDeepEquals;
 import static io.github.opencubicchunks.cubicchunks.testutils.Misc.generateRandomLevelCube;
+import static io.github.opencubicchunks.cubicchunks.testutils.Misc.palettedContainerFactory;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -27,10 +28,12 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 public class TestClientCubeCache extends BaseTest {
-    @Disabled // E7: клиентский кэш и миксины в тестах ещё не применяются
+    @Disabled // E7: клиентские миксины не применяются в юнит-тестах dedicated server. Контракт пакета, drop и радиуса — TestClientCubeNetwork.
     @Test
     public void basicTests() {
         ClientLevel clientLevelMock = mock(Mockito.RETURNS_DEEP_STUBS);
+        var blockPalette = palettedContainerFactory();
+        when(clientLevelMock.palettedContainerFactory()).thenReturn(blockPalette);
         when(((CanBeCubic) clientLevelMock).cc_isCubic()).thenReturn(true);
         when(clientLevelMock.getHeight()).thenReturn(384);
         when(clientLevelMock.getSectionsCount()).thenReturn(24);
@@ -106,12 +109,12 @@ public class TestClientCubeCache extends BaseTest {
         assertThat(clientChunkCache.cc_getCube(pos2.getX(), pos2.getY(), pos2.getZ(), true)).isSameAs(emptyCube);
     }
 
-    // TODO should this one be under integration tests instead?
-    // TODO disabled until we can do tests with registries (currently errors due to registries being mocked)
-    @Disabled // E7: приём пакета куба на клиенте
+    @Disabled // E7: клиентские миксины не применяются в юнит-тестах dedicated server. Контракт пакета, drop и радиуса — TestClientCubeNetwork.
     @Test
     public void receiveCubePacketTest() {
         ClientLevel clientLevelMock = mock(Mockito.RETURNS_DEEP_STUBS);
+        var blockPalette = palettedContainerFactory();
+        when(clientLevelMock.palettedContainerFactory()).thenReturn(blockPalette);
         when(((CanBeCubic) clientLevelMock).cc_isCubic()).thenReturn(true);
         when(clientLevelMock.getHeight()).thenReturn(384);
         when(clientLevelMock.getSectionsCount()).thenReturn(24);
@@ -151,10 +154,12 @@ public class TestClientCubeCache extends BaseTest {
     /**
      * Test that if a cube position is within the range of storage, then all adjacent chunk positions are also in range
      */
+    @Disabled // E7: клиентские миксины не применяются в юнит-тестах dedicated server. Контракт пакета, drop и радиуса — TestClientCubeNetwork.
     @Test
-    @Disabled // E7: клиентский кэш и миксины в тестах ещё не применяются
     public void testCubeRangeContainedWithinChunkRange() {
         ClientLevel clientLevelMock = mock(Mockito.RETURNS_DEEP_STUBS);
+        var blockPalette = palettedContainerFactory();
+        when(clientLevelMock.palettedContainerFactory()).thenReturn(blockPalette);
         when(((CanBeCubic) clientLevelMock).cc_isCubic()).thenReturn(true);
         when(clientLevelMock.getHeight()).thenReturn(384);
         when(clientLevelMock.getSectionsCount()).thenReturn(24);

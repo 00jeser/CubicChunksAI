@@ -7,6 +7,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 import io.github.opencubicchunks.cc_core.api.CubePos;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
@@ -18,7 +19,6 @@ import net.minecraft.client.multiplayer.ClientChunkCache;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.network.FriendlyByteBuf;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -31,12 +31,11 @@ public class TestCCClientboundSetCubeCacheCenterPacket extends BaseTest {
         assertDeepEquals(CCClientboundSetCubeCacheCenterPacket.STREAM_CODEC.decode(buf), packet);
     }
 
-    @Disabled // E7: клиентские миксины сети в тестах ещё не применяются
     @Test
     public void handlerTest() {
         IPayloadContext payloadContextMock = mock(Mockito.RETURNS_DEEP_STUBS);
         ClientLevel clientLevelMock = mock(Mockito.RETURNS_DEEP_STUBS);
-        ClientChunkCache clientChunkCacheMock = mock(ClientChunkCache.class);
+        ClientChunkCache clientChunkCacheMock = mock(ClientChunkCache.class, withSettings().extraInterfaces(ClientCubeCache.class));
         when(clientLevelMock.getChunkSource()).thenReturn(clientChunkCacheMock);
         when(((CanBeCubic) clientLevelMock).cc_isCubic()).thenReturn(true);
         when(clientLevelMock.getHeight()).thenReturn(384);

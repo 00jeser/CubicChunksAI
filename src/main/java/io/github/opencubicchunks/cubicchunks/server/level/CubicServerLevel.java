@@ -3,6 +3,7 @@ package io.github.opencubicchunks.cubicchunks.server.level;
 import io.github.opencubicchunks.cc_core.annotation.UsedFromASM;
 import io.github.opencubicchunks.cc_core.world.level.CloPos;
 import io.github.opencubicchunks.cubicchunks.world.level.CubicLevel;
+import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 
 public interface CubicServerLevel extends CubicLevel {
     @UsedFromASM
@@ -10,4 +11,6 @@ public interface CubicServerLevel extends CubicLevel {
 
     @UsedFromASM
     void invalidateCapabilities(CloPos cloPos);
+
+    void cc_tickCube(LevelCube levelCube, int randomTickSpeed);
 }

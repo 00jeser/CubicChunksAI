@@ -1,7 +1,7 @@
 # E7 — Сеть и клиентский кэш
 
 **Этап ТЗ:** 2. Кубический мир виден  
-**Статус:** planned  
+**Статус:** done  
 **Зависимости:** [E6](e6-server-load.md)  
 **Следующий:** [E8](e8-render.md)
 
@@ -163,3 +163,15 @@ S1 секции в буфер → S2 центр и забывание → S3 т�
 - Приёмка прогнана
 - ARCHITECTURE §3 обновлён
 - Регрессия E4–E6 цела
+
+## Итог
+
+Сервер на кубическом уровне шлёт `CCClientboundLevelCubeWithLightPacket`: в буфере `CubePos` и байты секций, хвоста со светом нет. Клиент собирает `LevelCube` с теми же блоками синусоиды. Пустая карта высот и пустой потребитель block entity остаются явными (E9, E16). `queueLightUpdate` ничего не рисует: меш — E8.
+
+`CCClientboundSetCubeCacheCenterPacket` задумывался из `MixinChunkMap.cc_applyChunkTrackingView`. Этот метод пропускается как `@Final`, поэтому центр шлёт `MixinPlayerChunkSender`, когда куб игрока сменился. Иначе окно остаётся на кубе 0 и куб на Y≈−313 не принимается. `cc_updateViewCenter` двигает окно и снимает кубы вне радиуса. В batch отправителя попадают только уже готовые ключи: колонка без `getChunkToSend` очередь не занимает. `cc_drop` куб из `Storage` убирает и исключения не бросает. Серверный куб при этом не очищается.
+
+Стиль `ClientLevel` приходит пакетом `CCClientboundLevelInfoPacket` перед логином и респавном и применяется после `Level.<init>`, до `ClientChunkCache`. `CHUNK` кубовый кэш не создаёт и пакет куба не получает.
+
+Радиус `Storage` — чебышёвский, большее из ванильного `calculateStorageRange(viewDistance)` и той же формулы от `verticalViewDistance`. Отдельной вертикальной оси у массива нет. Тест «радиус 2, расстояние 4» идёт через `Storage`, а не через конфиг по умолчанию.
+
+Обработчики трёх пакетов куба, центра и forget зелёные: мок `ClientChunkCache` реализует `ClientCubeCache`, клиентский миксин для этого не нужен. `TestClientCubeCache` остаётся `@Disabled`: в юнит-тестах dist dedicated server клиентские миксины не применяются. Тот же контракт секций, drop, радиуса и покрытия секций колонками закрывает `TestClientCubeNetwork`. `cc_replaceBiomes` по-прежнему кидает `UnsupportedOperationException`: теста пакета биомов нет (E12).

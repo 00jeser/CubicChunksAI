@@ -1,5 +1,6 @@
 package io.github.opencubicchunks.cubicchunks.integrationtest.server.level;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -27,6 +28,8 @@ import io.github.opencubicchunks.cubicchunks.testutils.BaseTest;
 import io.github.opencubicchunks.cubicchunks.testutils.CloseableReference;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.ProtoCube;
+import io.github.opencubicchunks.cubicchunks.world.level.cube.status.CubePyramid;
+import io.github.opencubicchunks.cubicchunks.world.level.cube.status.CubeStep;
 import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.DistanceManager;
 import net.minecraft.server.level.ServerChunkCache;
@@ -39,7 +42,6 @@ import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.storage.LevelStorageSource;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -55,6 +57,18 @@ import org.mockito.Mockito;
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class IntegrationTestServerCubeCache extends BaseTest {
+    private java.nio.file.Path dimensionPath;
+
+    @Test
+    public void pyramidHasNoiseAndFull() {
+        CubePyramid pyramid = CubePyramid.CC_GENERATION_PYRAMID_CUBES;
+        CubeStep noise = pyramid.getStepTo(ChunkStatus.NOISE);
+        CubeStep full = pyramid.getStepTo(ChunkStatus.FULL);
+        assertSame(ChunkStatus.NOISE, noise.targetStatus());
+        assertSame(ChunkStatus.FULL, full.targetStatus());
+        assertEquals(ChunkStatus.getStatusList().size(), pyramid.steps().size());
+    }
+
     private Stream<ChunkStatus> chunkStatuses() {
         return ChunkStatus.getStatusList().stream();
     }
@@ -83,12 +97,16 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             f.setAccessible(true);
             f.set(serverLevelMock, true);
             when(((CanBeCubic) serverLevelMock).cc_isCubic()).thenReturn(true);
+            // Deep stubs would hand generateNoise a mock palette, and setBlockState then never finishes the cube future.
+            var blockPalette = io.github.opencubicchunks.cubicchunks.testutils.Misc.palettedContainerFactory();
+            when(serverLevelMock.palettedContainerFactory()).thenReturn(blockPalette);
         }
         when(serverLevelMock.getHeight()).thenReturn(384);
         when(serverLevelMock.getSectionsCount()).thenReturn(24);
         // We seem to need an actual directory, not a mock
         LevelStorageSource.LevelStorageAccess levelStorageAccessMock = mock(Mockito.RETURNS_DEEP_STUBS);
-        when(levelStorageAccessMock.getDimensionPath(any())).thenReturn(Files.createTempDirectory("cc_test"));
+        dimensionPath = Files.createTempDirectory("cc_test");
+        when(levelStorageAccessMock.getDimensionPath(any())).thenReturn(dimensionPath);
         var serverChunkCache = new ServerChunkCache(serverLevelMock, levelStorageAccessMock, mock(Mockito.RETURNS_DEEP_STUBS),
                 mock(Mockito.RETURNS_DEEP_STUBS),
                 // We run everything on the main thread as Mockito has race conditions when multiple threads call into it
@@ -259,7 +277,6 @@ public class IntegrationTestServerCubeCache extends BaseTest {
         }
     }
 
-    @Disabled // E6: загрузка куба не завершается, пока шаги генерации — passThrough
     @ParameterizedTest
     @MethodSource("chunkStatuses")
     public void getCube(ChunkStatus status) throws Exception {
@@ -269,7 +286,6 @@ public class IntegrationTestServerCubeCache extends BaseTest {
     /**
      * getNow a single cube in a cubic ServerChunkCache
      */
-    @Disabled // E6: загрузка куба не завершается, пока шаги генерации — passThrough
     @Test
     public void getCubeNow() throws Exception {
         try (var serverChunkCacheRef = createServerChunkCache(false)) {
@@ -325,7 +341,6 @@ public class IntegrationTestServerCubeCache extends BaseTest {
     /**
      * test hasCube a for single cube in a cubic ServerChunkCache
      */
-    @Disabled // E6: загрузка куба не завершается, пока шаги генерации — passThrough
     @Test
     public void hasCube() throws Exception {
         try (var serverChunkCacheRef = createServerChunkCache(false)) {
@@ -375,7 +390,6 @@ public class IntegrationTestServerCubeCache extends BaseTest {
     /**
      * Get a cube and nearby cubes and chunks in a cubic ServerChunkCache
      */
-    @Disabled // E6: загрузка куба не завершается, пока шаги генерации — passThrough
     @Test
     public void getCubeAndNeighboringCubesAndChunks() throws Exception {
         try (var serverChunkCacheRef = createServerChunkCache(false)) {
@@ -406,7 +420,6 @@ public class IntegrationTestServerCubeCache extends BaseTest {
         }
     }
 
-    @Disabled // E6: загрузка куба не завершается, пока шаги генерации — passThrough
     @Test
     public void testAddCubicTicketWithRadius() throws Exception {
         try (var serverChunkCacheRef = createServerChunkCache(false)) {
@@ -419,6 +432,92 @@ public class IntegrationTestServerCubeCache extends BaseTest {
             assertNotNull(cubeAccess);
             assertTrue(cubeAccess.getPersistedStatus().isOrAfter(ChunkStatus.FULL));
             assertInstanceOf(LevelCube.class, cubeAccess);
+        }
+    }
+
+    @Test
+    public void fullCubeHasSineStoneAndNoCubeRegion() throws Exception {
+        int before = io.github.opencubicchunks.cubicchunks.server.level.FullCubeTracker.count();
+        try (var serverChunkCacheRef = createServerChunkCache(false)) {
+            var cube = ((ServerCubeCache) serverChunkCacheRef.value()).cc_getCube(0, 0, 0, ChunkStatus.FULL, true);
+            assertInstanceOf(LevelCube.class, cube);
+            assertSine(cube);
+            assertNoCubeRegion(dimensionPath);
+        }
+        assertTrue(io.github.opencubicchunks.cubicchunks.server.level.FullCubeTracker.count() > before);
+    }
+
+    @Test
+    public void chunkStyleDoesNotCreateLevelCube() throws Exception {
+        try (var serverChunkCacheRef = createServerChunkCache(true)) {
+            var chunk = serverChunkCacheRef.value().getChunk(0, 0, ChunkStatus.FULL, true);
+            assertInstanceOf(LevelChunk.class, chunk);
+            var visibleField = net.minecraft.server.level.ChunkMap.class.getDeclaredField("visibleChunkMap");
+            visibleField.setAccessible(true);
+            var map = (java.util.Map<?, ?>) visibleField.get(serverChunkCacheRef.value().chunkMap);
+            for (Object holder : map.values()) {
+                assertFalse(((io.github.opencubicchunks.cubicchunks.server.level.CloHolder) holder).cc_getCloPos().isCube());
+            }
+        }
+    }
+
+    @Test
+    public void spawnSearchTicketKeepsCubeY() throws Exception {
+        try (var serverChunkCacheRef = createServerChunkCache(false)) {
+            var cache = (ServerCubeCache) serverChunkCacheRef.value();
+            var cube = CloPos.cube(3, 5, -4);
+            var future = cache.cc_addTicketAndLoadWithRadius(TicketType.SPAWN_SEARCH, cube, 0);
+            assertNotNull(future);
+            assertTrue(cube.isCube());
+            var storageField = ServerChunkCache.class.getDeclaredField("ticketStorage");
+            storageField.setAccessible(true);
+            var storage = (net.minecraft.world.level.TicketStorage) storageField.get(serverChunkCacheRef.value());
+            boolean spawnTicket = storage.getTickets(cube.toLong()).stream().anyMatch(ticket -> ticket.getType() == TicketType.SPAWN_SEARCH);
+            assertTrue(spawnTicket, "spawn search ticket is stored on the cube CloPos");
+        }
+    }
+
+    private static void assertSine(io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess cube) {
+        var cubePos = cube.cc_getCubePos();
+        int amplitude = 20;
+        boolean foundStone = false;
+        int minY = cubePos.minCubeY();
+        int maxY = cubePos.maxCubeY();
+        for (int y = minY; y <= maxY && !foundStone; y++) {
+            for (int x = 0; x < io.github.opencubicchunks.cc_core.api.CubicConstants.DIAMETER_IN_BLOCKS && !foundStone; x++) {
+                for (int z = 0; z < io.github.opencubicchunks.cc_core.api.CubicConstants.DIAMETER_IN_BLOCKS; z++) {
+                    if (sineStone(y, x, z, cubePos.minCubeX(), cubePos.minCubeZ(), amplitude)) {
+                        var state = cube.getBlockState(new net.minecraft.core.BlockPos(x, y, z));
+                        assertEquals(net.minecraft.world.level.block.Blocks.SMOOTH_STONE.defaultBlockState(), state);
+                        foundStone = true;
+                        break;
+                    }
+                }
+            }
+        }
+        assertTrue(foundStone, "sine places smooth stone inside the cube");
+        int airY = io.github.opencubicchunks.cubicchunks.CubicChunks.SUPERFLAT_HEIGHT + amplitude + 1;
+        assertTrue(airY <= maxY, "cube contains a block above the sine amplitude");
+        var air = cube.getBlockState(new net.minecraft.core.BlockPos(0, airY, 0));
+        assertTrue(air.isAir(), "block above the sine amplitude is air");
+    }
+
+    @SuppressWarnings("checkstyle:MagicNumber")
+    private static boolean sineStone(int y, int x, int z, int cubeX, int cubeZ, int amplitude) {
+        return y + Math.round((amplitude * (Math.sin((x + cubeX) / 8.0 + (z + cubeZ) / 21.0) + Math.cos((z + cubeZ) / 13.0)))
+                / 2.0) <= io.github.opencubicchunks.cubicchunks.CubicChunks.SUPERFLAT_HEIGHT;
+    }
+
+    private static void assertNoCubeRegion(java.nio.file.Path dimensionPath) throws java.io.IOException {
+        if (!java.nio.file.Files.exists(dimensionPath)) {
+            return;
+        }
+        try (var walk = java.nio.file.Files.walk(dimensionPath)) {
+            boolean cubeRegion = walk.anyMatch(path -> {
+                String name = path.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+                return name.contains("region3d") || name.equals("cubes") || name.endsWith(".3dr");
+            });
+            assertFalse(cubeRegion, "dimension folder has a 3D cube region");
         }
     }
 }

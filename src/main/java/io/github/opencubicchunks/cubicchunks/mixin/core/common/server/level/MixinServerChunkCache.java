@@ -26,6 +26,7 @@ import io.github.opencubicchunks.cubicchunks.mixin.core.common.world.level.chunk
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCloSet;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.ChunkToCubeSet;
 import io.github.opencubicchunks.cubicchunks.mixin.dasmsets.GlobalSet;
+import io.github.opencubicchunks.cubicchunks.server.level.CubicChunkMap;
 import io.github.opencubicchunks.cubicchunks.server.level.ServerCubeCache;
 import io.github.opencubicchunks.cubicchunks.world.level.chunklike.LevelClo;
 import io.github.opencubicchunks.cubicchunks.world.level.cube.CubeAccess;
@@ -102,6 +103,8 @@ public abstract class MixinServerChunkCache extends MixinChunkSource implements 
     @Shadow private @Nullable NaturalSpawner.SpawnState lastSpawnState;
 
     @Shadow protected abstract void getFullChunk(long chunkPos, Consumer<LevelChunk> fullChunkGetter);
+
+    @Shadow protected abstract boolean runDistanceManagerUpdates();
 
     @Shadow @Final private Set<ChunkHolder> chunkHoldersToBroadcast;
 
@@ -312,6 +315,25 @@ public abstract class MixinServerChunkCache extends MixinChunkSource implements 
     @AddMethodToSets(containers = ChunkToCubeSet.ServerChunkCache_redirects.class, method = "addTicketWithRadius(Lnet/minecraft/server/level/TicketType;Lnet/minecraft/world/level/ChunkPos;I)V")
     public void cc_addTicketWithRadius(TicketType ticket, CubePos cubePos, int radius) {
         cc_addTicketWithRadius(ticket, CloPos.cube(cubePos), radius);
+    }
+
+    /**
+     * Cube form of {@link ServerChunkCache#addTicketAndLoadWithRadius}. The returned future follows the cube holder, so a spawn search keeps Y.
+     */
+    @Override public CompletableFuture<?> cc_addTicketAndLoadWithRadius(TicketType type, CloPos pos, int radius) {
+        if (!type.doesLoad()) {
+            throw new IllegalStateException("Ticket type " + type + " does not trigger chunk loading");
+        } else if (type.canExpireIfUnloaded()) {
+            throw new IllegalStateException("Ticket type " + type + " can expire before it loads, cannot fetch asynchronously");
+        } else {
+            this.cc_addTicketWithRadius(type, pos, radius);
+            this.runDistanceManagerUpdates();
+            ChunkHolder holder = this.getVisibleChunkIfPresent(pos.toLong());
+            if (holder == null) {
+                throw new IllegalStateException("No cube holder after ticket has been added");
+            }
+            return ((CubicChunkMap) this.chunkMap).cc_cubeRangeFuture(holder, radius, distance -> ChunkStatus.FULL);
+        }
     }
 
     @AddMethodToSets(containers = ChunkToCubeSet.ServerChunkCache_redirects.class, method = "removeTicketWithRadius(Lnet/minecraft/server/level/TicketType;Lnet/minecraft/world/level/ChunkPos;I)V")

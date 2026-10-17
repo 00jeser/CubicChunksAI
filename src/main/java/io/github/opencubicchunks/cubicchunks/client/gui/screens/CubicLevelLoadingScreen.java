@@ -3,6 +3,8 @@ package io.github.opencubicchunks.cubicchunks.client.gui.screens;
 import java.util.List;
 import java.util.Locale;
 
+import javax.annotation.Nullable;
+
 import io.github.opencubicchunks.cc_core.api.CubicConstants;
 import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cubicchunks.CubicChunks;
@@ -99,10 +101,34 @@ public class CubicLevelLoadingScreen {
                 guiGraphics.guiHeight(), CubicConstants.DIAMETER_IN_SECTIONS, null));
     }
 
+    /**
+     * Колонка из ванильного вида. Если прогресс пришёл как {@code CloPos}, {@code get(x, z)} не колонка и не вызывается.
+     */
+    public static @Nullable ChunkStatus columnStatus(ChunkLoadStatusView progressListener, int x, int z) {
+        if (progressListener instanceof CloPosProgress progress && !progress.cc_columnsAvailable()) {
+            return null;
+        }
+        return progressListener.get(x, z);
+    }
+
+    public static int[] columnStatusCounts(ChunkLoadStatusView progressListener) {
+        int[] chunkStatusCounts = new int[ChunkStatus.getStatusList().size()];
+        int sectionRenderRadius = progressListener.radius() * 2 + 1;
+        countChunks(progressListener, chunkStatusCounts, sectionRenderRadius);
+        return chunkStatusCounts;
+    }
+
+    public static int[] cubeStatusCounts(ChunkLoadStatusView progressListener) {
+        int[] cubeStatusCounts = new int[ChunkStatus.getStatusList().size()];
+        int sectionRenderRadius = progressListener.radius() * 2 + 1;
+        countCubes(progressListener, cubeStatusCounts, Coords.sectionToCubeCeil(sectionRenderRadius));
+        return cubeStatusCounts;
+    }
+
     private static void countChunks(ChunkLoadStatusView progressListener, int[] chunkStatusCounts, int sectionRenderRadius) {
         for (int cdx = 0; cdx < sectionRenderRadius; cdx++) {
             for (int cdz = 0; cdz < sectionRenderRadius; cdz++) {
-                ChunkStatus status = progressListener.get(cdx, cdz);
+                ChunkStatus status = columnStatus(progressListener, cdx, cdz);
                 if (status == null) {
                     continue;
                 }

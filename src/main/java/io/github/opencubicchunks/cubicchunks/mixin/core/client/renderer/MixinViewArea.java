@@ -3,6 +3,8 @@ package io.github.opencubicchunks.cubicchunks.mixin.core.client.renderer;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
+import io.github.opencubicchunks.cubicchunks.CubicChunks;
+import io.github.opencubicchunks.cubicchunks.client.renderer.CubicViewArea;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.ViewArea;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
@@ -17,7 +19,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ViewArea.class)
-public abstract class MixinViewArea {
+public abstract class MixinViewArea implements CubicViewArea.Radius {
     @Shadow @Final protected Level level;
     @Shadow protected int sectionGridSizeY;
     @Shadow protected int sectionGridSizeX;
@@ -27,7 +29,14 @@ public abstract class MixinViewArea {
     @Shadow private SectionPos cameraSectionPos;
     @Shadow @Final protected LevelRenderer levelRenderer;
 
+    /** Секции, не чанки. Пишется в {@code setViewDistance}, кадр конфиг не читает. */
+    private int cc_verticalViewDistance;
+
     @Shadow protected abstract int getSectionIndex(int x, int y, int z);
+
+    @Override public int cc_verticalRadiusSections() {
+        return this.cc_verticalViewDistance;
+    }
 
     // This could be multiple more specific injects, but overwriting the method is probably cleaner
     @Inject(method = "setViewDistance", at = @At("HEAD"), cancellable = true)
@@ -36,10 +45,11 @@ public abstract class MixinViewArea {
             return;
         }
         ci.cancel();
-        int i = renderDistanceChunks * 2 + 1;
-        this.sectionGridSizeX = i;
-        this.sectionGridSizeY = i;
-        this.sectionGridSizeZ = i;
+        // Кэш радиуса на перестройку области. Следующий кадр читает поле, не toml.
+        this.cc_verticalViewDistance = CubicChunks.config().getVerticalViewDistance();
+        this.sectionGridSizeX = CubicViewArea.horizontalGridSize(renderDistanceChunks);
+        this.sectionGridSizeY = CubicViewArea.verticalGridSize(this.cc_verticalViewDistance);
+        this.sectionGridSizeZ = this.sectionGridSizeX;
         this.viewDistance = renderDistanceChunks;
     }
 
@@ -85,7 +95,7 @@ public abstract class MixinViewArea {
                 int originZ = i2 + Math.floorMod(sectionZ - i2, this.sectionGridSizeZ);
 
                 for (int sectionY = 0; sectionY < this.sectionGridSizeY; sectionY++) {
-                    int i3 = newSectionPos.y() - this.viewDistance;
+                    int i3 = newSectionPos.y() - this.cc_verticalViewDistance;
                     int originY = i3 + Math.floorMod(sectionY - i3, this.sectionGridSizeY);
                     SectionRenderDispatcher.RenderSection renderSection = this.sections[this.getSectionIndex(sectionX, sectionY, sectionZ)];
                     long oldSectionNode = renderSection.getSectionNode();
@@ -101,8 +111,7 @@ public abstract class MixinViewArea {
     }
 
     private boolean cc_containsSection(int x, int y, int z) {
-        return x >= this.cameraSectionPos.x() - this.viewDistance && x <= this.cameraSectionPos.x() + this.viewDistance
-                && y >= this.cameraSectionPos.y() - this.viewDistance && y <= this.cameraSectionPos.y() + this.viewDistance
-                && z >= this.cameraSectionPos.z() - this.viewDistance && z <= this.cameraSectionPos.z() + this.viewDistance;
+        return CubicViewArea.containsSection(this.cameraSectionPos.x(), this.cameraSectionPos.y(), this.cameraSectionPos.z(), this.viewDistance,
+                this.cc_verticalViewDistance, x, y, z);
     }
 }

@@ -2,8 +2,10 @@ package io.github.opencubicchunks.cubicchunks.mixin.core.client.renderer.chunk;
 
 import io.github.opencubicchunks.cc_core.utils.Coords;
 import io.github.opencubicchunks.cubicchunks.CanBeCubic;
+import io.github.opencubicchunks.cubicchunks.client.multiplayer.ClientCubeCache;
 import io.github.opencubicchunks.cubicchunks.client.renderer.chunk.CCSectionCopy;
-import io.github.opencubicchunks.cubicchunks.world.level.CubicLevel;
+import io.github.opencubicchunks.cubicchunks.world.level.cube.LevelCube;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.chunk.RenderRegionCache;
 import net.minecraft.client.renderer.chunk.RenderSectionRegion;
 import net.minecraft.client.renderer.chunk.SectionCopy;
@@ -33,8 +35,9 @@ public abstract class MixinRenderRegionCache {
     ) {
         if (((CanBeCubic) level).cc_isCubic()) {
             var sectionPos = SectionPos.of(sectionPosLong);
-            var cube = ((CubicLevel) level).cc_getCube(Coords.sectionToCube(sectionPos.getX()), Coords.sectionToCube(sectionPos.getY()),
-                    Coords.sectionToCube(sectionPos.getZ()));
+            // load=false: промах кэша — пустой куб, не колонка и не cc_read.
+            LevelCube cube = ((ClientCubeCache) ((ClientLevel) level).getChunkSource()).cc_cubeForMesh(Coords.sectionToCube(sectionPos.getX()),
+                    Coords.sectionToCube(sectionPos.getY()), Coords.sectionToCube(sectionPos.getZ()));
             cir.setReturnValue(CCSectionCopy.cc_create(cube, Coords.sectionToIndex(sectionPos.getX(), sectionPos.getY(), sectionPos.getZ())));
         }
     }

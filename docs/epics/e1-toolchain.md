@@ -158,3 +158,9 @@ S1 версии → S2 toml и runs → S3 ядро на Java 25
 - Приёмка прогнана
 - `docs/architecture.md` отражает Java 25 и цель 26.1.2
 - Регрессия границы JAR ядра цела
+
+## Поздняя правка: JAR мода самодостаточен
+
+`implementation` ядра кладёт linked-JAR только на dev-classpath. В `build/libs/cubicchunks-*.jar` классов `cc_core` не было, и обычная установка NeoForge падала с `NoClassDefFoundError`. Задача `jar` теперь вкладывает `configurations.coreHeaderJar` (это javaheaders-linked JAR, не сырой header) в тот же модуль. Заглушки `cc_core/minecraft/**` не входят. Вложенный jarJar ядра не используется: второй JAR с тем же пакетом FML режет слой. `regionlib` и `noise` в этот JAR не кладутся: текущий байткод их не вызывает, версии поднимают E11 и E12.
+
+`jarJar` зависит от `patchDasmNeoforge`. Без этой связи первый `./gradlew build` на чистом дереве падает: трансформ javaheaders требует уже существующий `build/dasm/dasm-neoforge-3.2.0-fml.jar`. Для чужих JAR трансформ копирует вход в свой выход, а не объявляет вход готовым выходом.

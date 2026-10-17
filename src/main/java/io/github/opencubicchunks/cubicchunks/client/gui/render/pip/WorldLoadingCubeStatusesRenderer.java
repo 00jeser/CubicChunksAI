@@ -114,7 +114,7 @@ public class WorldLoadingCubeStatusesRenderer extends PictureInPictureRenderer<W
     ) {
         for (int cdx = 0; cdx < sectionRenderRadius; cdx++) {
             for (int cdz = 0; cdz < sectionRenderRadius; cdz++) {
-                ChunkStatus columnStatus = progressListener.get(cdx, cdz);
+                ChunkStatus columnStatus = CubicLevelLoadingScreen.columnStatus(progressListener, cdx, cdz);
                 if (columnStatus == null) {
                     continue;
                 }

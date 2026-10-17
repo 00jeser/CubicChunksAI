@@ -25,7 +25,11 @@ public abstract class MixinLevelLoadingScreen extends Screen {
     ) {
         // TODO probably should check if overworld will be cubic before `level` is instantiated,
         // otherwise there's a flash of the vanilla loading screen before we start rendering the CC one
-        Level level = Minecraft.getInstance().getSingleplayerServer().overworld();
+        var server = Minecraft.getInstance().getSingleplayerServer();
+        if (server == null) {
+            return;
+        }
+        Level level = server.overworld();
         if (level == null || !((CanBeCubic) level).cc_isCubic()) {
             return;
         }
